@@ -186,7 +186,14 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['email'] = user.email
         token['is_staff'] = user.is_staff
         token['groups'] = list(user.groups.values_list('name', flat=True))
-        token['profile_picture'] = profile.profile_picture.url if profile.profile_picture else None
+
+        # Safely get the profile picture URL.
+        # This prevents errors in production if the file is missing from storage.
+        try:
+            token['profile_picture'] = profile.profile_picture.url if profile.profile_picture else None
+        except (ValueError, AttributeError):
+            token['profile_picture'] = None
+
         token['first_name'] = user.first_name
         token['last_name'] = user.last_name
 
