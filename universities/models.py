@@ -40,7 +40,6 @@ class UserDashboard(models.Model):
         max_length=10, choices=SUBSCRIPTION_CHOICES, default='none'
     )
     subscription_end_date = models.DateField(null=True, blank=True)
-    phone_number = models.CharField(max_length=20, blank=True, default='')
 
     def __str__(self):
         return f"{self.user.username}'s Dashboard"

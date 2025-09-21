@@ -1,8 +1,12 @@
 from rest_framework import serializers
 from .models import University, UserDashboard
 from django.contrib.auth.models import User, Group
+from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django.core.validators import validate_email
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.settings import api_settings
+from profiles.models import Profile
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -10,7 +14,7 @@ class UserSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     first_name = serializers.CharField(required=True, max_length=150)
     last_name = serializers.CharField(required=True, max_length=150)
-    phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=20)
+    phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20, write_only=True)
 
     class Meta:
         model = User
@@ -19,7 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
         extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
-        phone_number = validated_data.pop('phone_number', '')
+        phone_number = validated_data.pop('phone_number', None)
         # Use create_user to properly hash the password
         user = User.objects.create_user(
             username=validated_data['username'],
@@ -28,10 +32,6 @@ class UserSerializer(serializers.ModelSerializer):
             first_name=validated_data['first_name'],
             last_name=validated_data['last_name']
         )
-        # The post_save signal creates the dashboard, now we update it.
-        if hasattr(user, 'dashboard'):
-            user.dashboard.phone_number = phone_number
-            user.dashboard.save()
         # Add user to the 'user' group by default on registration
         try:
             user_group = Group.objects.get(name='user')
@@ -40,6 +40,15 @@ class UserSerializer(serializers.ModelSerializer):
             # In a production app, you would ensure this group exists
             # via a migration or a management command.
             pass
+
+        # The Profile model is often created via a post_save signal.
+        # Using get_or_create is a safe way to handle the profile update
+        # regardless of whether the signal has run.
+        if phone_number:
+            profile, _ = Profile.objects.get_or_create(user=user)
+            profile.phone_number = phone_number
+            profile.save()
+
         return user
 
 class SafeDashboardField(serializers.Field):
@@ -80,17 +89,16 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "groups", "is_staff", "is_active", "date_joined", "dashboard"]
+        fields = ["id", "username", "email", "first_name", "last_name", "groups", "is_staff", "is_active", "date_joined", "dashboard"]
         read_only_fields = ["id", "username", "email", "date_joined", "is_staff"]
     
     def update(self, instance, validated_data):
         dashboard_data = validated_data.pop('dashboard', None)
 
-        # Update user fields
-        instance.is_active = validated_data.get('is_active', instance.is_active)
-        if 'groups' in validated_data:
-            instance.groups.set(validated_data.get('groups'))
-        instance.save()
+        # Let the parent class handle the update for User model fields,
+        # including M2M fields like 'groups'.
+        # We pop 'dashboard' first as it's not a real model field and needs custom handling.
+        instance = super().update(instance, validated_data)
 
         # Update nested dashboard subscription fields
         if dashboard_data:
@@ -123,32 +131,63 @@ class UserDashboardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserDashboard
-        fields = ['first_name', 'last_name', 'phone_number', 'favorites', 'planning_to_apply', 'applied', 'accepted', 'visa_approved', 'subscription_status', 'subscription_end_date']
-
-class UserProfileUpdateSerializer(serializers.Serializer):
-    first_name = serializers.CharField(max_length=150, required=False)
-    last_name = serializers.CharField(max_length=150, required=False)
-    phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
-
-    def update(self, instance, validated_data):
-        # instance here is the user
-        instance.first_name = validated_data.get('first_name', instance.first_name)
-        instance.last_name = validated_data.get('last_name', instance.last_name)
-        instance.save()
-
-        if 'phone_number' in validated_data:
-            dashboard, _ = UserDashboard.objects.get_or_create(user=instance)
-            dashboard.phone_number = validated_data.get('phone_number')
-            dashboard.save()
-        
-        return instance
+        fields = ['first_name', 'last_name', 'favorites', 'planning_to_apply', 'applied', 'accepted', 'visa_approved', 'subscription_status', 'subscription_end_date']
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # The frontend can send either a username or an email in the 'username' field.
+        username_or_email = attrs.get(self.username_field)
+        password = attrs.get('password')
+        user = None
+
+        # Check if the input looks like an email
+        try:
+            validate_email(username_or_email)
+            is_email = True
+        except ValidationError:
+            is_email = False
+
+        if is_email:
+            # Try to find a user with this email (case-insensitive).
+            try:
+                user_obj = User.objects.get(email__iexact=username_or_email)
+                if user_obj.check_password(password):
+                    user = user_obj
+            except User.DoesNotExist:
+                # Fall through to the default authentication method.
+                pass
+
+        # If not authenticated by email, or if it wasn't an email, try default authentication.
+        if not user:
+            user = authenticate(
+                request=self.context.get('request'),
+                username=username_or_email,
+                password=password
+            )
+
+        if not user or not user.is_active:
+            raise serializers.ValidationError('No active account found with the given credentials.')
+
+        self.user = user
+
+        refresh = self.get_token(self.user)
+
+        data = {"refresh": str(refresh), "access": str(refresh.access_token)}
+
+        return data
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
+        # The `get_or_create` is a safeguard in case the post_save signal for profile creation failed.
+        profile, created = Profile.objects.get_or_create(user=user)
         # Add custom claims
         token['username'] = user.username
+        token['email'] = user.email
         token['is_staff'] = user.is_staff
         token['groups'] = list(user.groups.values_list('name', flat=True))
+        token['profile_picture'] = profile.profile_picture.url if profile.profile_picture else None
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+
         return token

@@ -24,9 +24,16 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from .models import University, UserDashboard
 from .permissions import HasActiveSubscription
-from .serializers import UniversitySerializer, UserSerializer, UserDetailSerializer, UserDashboardSerializer, GroupSerializer, UserProfileUpdateSerializer
+from .serializers import (
+    UniversitySerializer, UserSerializer, UserDetailSerializer, 
+    UserDashboardSerializer, GroupSerializer, MyTokenObtainPairSerializer
+)
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import filters as drf_filters
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
 
 class CreateUserView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -72,17 +79,6 @@ def delete_university(request, pk):
     except University.DoesNotExist:
         return Response({'error': 'University not found'}, status=status.HTTP_404_NOT_FOUND)
 
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated, HasActiveSubscription])
-def get_university_detail(request, pk):
-    try:
-        university = University.objects.get(id=pk)
-        serializer = UniversitySerializer(university)
-        return Response(serializer.data)
-    except University.DoesNotExist:
-        return Response({'error': 'University not found'}, status=status.HTTP_404_NOT_FOUND)
-
 class DashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -114,16 +110,6 @@ class DashboardView(APIView):
 
         serializer = UserDashboardSerializer(dashboard)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def patch(self, request):
-        serializer = UserProfileUpdateSerializer(request.user, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        
-        # Return the complete, updated dashboard
-        dashboard = request.user.dashboard
-        final_serializer = UserDashboardSerializer(dashboard)
-        return Response(final_serializer.data, status=status.HTTP_200_OK)
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -220,19 +206,19 @@ class GroupList(generics.ListAPIView):
     permission_classes = [IsAdminUser]
 
 
-@api_view(['PUT'])
-@permission_classes([IsAdminUser])
-def update_university(request, pk):
-    try:
-        university = University.objects.get(id=pk)
-    except University.DoesNotExist:
-        return Response({'error': 'University not found'}, status=status.HTTP_404_NOT_FOUND)
+class UniversityRetrieveUpdateView(generics.RetrieveUpdateAPIView):
+    """
+    Handles retrieving and updating a single university instance.
+    GET requests are for viewing (requires subscription),
+    PUT/PATCH requests are for updating (requires admin).
+    """
+    queryset = University.objects.all()
+    serializer_class = UniversitySerializer
 
-    serializer = UniversitySerializer(university, data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return [IsAdminUser()]
+        return [IsAuthenticated(), HasActiveSubscription()]
 
 @method_decorator(csrf_exempt, name='dispatch')
 class PaymentWebhookView(APIView):

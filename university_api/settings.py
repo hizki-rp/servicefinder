@@ -48,10 +48,15 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5174",
     "http://localhost:5173",
+    "http://localhost:4173", # LOCAL BUILD
     "https://uni-frontend-lac.vercel.app",
+    "https://skyblue-ibis-580217.hostingersite.com",
 ]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
+
+
+
 
 # Application definition
 
@@ -71,6 +76,9 @@ INSTALLED_APPS = [
 
      'djoser',
      'rest_framework.authtoken',
+     
+     'contacts',
+     'profiles',
 ]
 
 REST_FRAMEWORK = {
@@ -172,3 +180,12 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # WhiteNoise configuration
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+
+# media definition
+
+# ... at the end of settings.py
+
+# Media files (user uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

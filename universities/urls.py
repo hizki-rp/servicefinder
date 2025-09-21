@@ -1,22 +1,30 @@
-from universities.views import InitializeChapaPaymentView
-from django.urls import path, include
+from django.urls import path
 from . import views
-from rest_framework.routers import DefaultRouter
-
-router = DefaultRouter()
-router.register(r'users', views.UserViewSet, basename='user')
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
-    path('groups/', views.GroupList.as_view(), name='group-list'),
-    
-    path('chapa/initialize/', InitializeChapaPaymentView.as_view(), name='initialize_chapa_payment'),
-    path('admin/stats/', views.AdminStatsView.as_view(), name='admin-stats'),
-    path('universities/', views.UniversityList.as_view(), name='university-list'),
-    path('universities/create/', views.create_university, name='create_university'),
+    # Authentication
+    path('token/', views.MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('register/', views.CreateUserView.as_view(), name='register'),
+
+    # This single path now handles both GET (retrieve) and PUT/PATCH (update) for a university.
+    # It replaces the old `get_university_detail` and `update_university` paths.
+    path('universities/<int:pk>/', views.UniversityRetrieveUpdateView.as_view(), name='university-detail'),
+
+    # University Management (Admin)
+    path('universities/create/', views.create_university, name='university-create'),
+    path('universities/<int:pk>/delete/', views.delete_university, name='university-delete'),
     path('universities/bulk_create/', views.UniversityBulkCreate.as_view(), name='university-bulk-create'),
-    path('universities/<int:pk>/', views.get_university_detail, name='university_detail'),
-    path('universities/<int:pk>/update/', views.update_university, name='update_university'),
-    path('universities/<int:pk>/delete/', views.delete_university, name='delete_university'),
+
+    # Public/User-facing University Views
+    path('universities/', views.UniversityList.as_view(), name='university-list'),
+
+    # User Dashboard
+    path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
+
+    # Payment
+    path('initialize-payment/', views.InitializeChapaPaymentView.as_view(), name='initialize_payment'),
+
+    # Admin specific
+    path('groups/', views.GroupList.as_view(), name='group-list'),
+    path('stats/', views.AdminStatsView.as_view(), name='admin-stats'),
 ]
