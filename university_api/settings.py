@@ -39,7 +39,9 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-yt)2uovn6ck=nwxdrvh#^
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 # Use environment variables for allowed hosts in production
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS_str = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+# Strip whitespace from hosts to avoid issues with comma-separated lists with spaces
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_str.split(',')]
 
 # Trust the 'X-Forwarded-Proto' header from the reverse proxy (like Render)
 # This ensures request.build_absolute_uri() generates https:// URLs correctly.
