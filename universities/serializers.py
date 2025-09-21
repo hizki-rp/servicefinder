@@ -41,11 +41,10 @@ class UserSerializer(serializers.ModelSerializer):
             # via a migration or a management command.
             pass
 
-        # The Profile model is often created via a post_save signal.
-        # Using get_or_create is a safe way to handle the profile update
-        # regardless of whether the signal has run.
+        # Always create a profile for the new user. This is more robust than
+        # relying on a signal, which might fail or not exist.
+        profile, created = Profile.objects.get_or_create(user=user)
         if phone_number:
-            profile, _ = Profile.objects.get_or_create(user=user)
             profile.phone_number = phone_number
             profile.save()
 
