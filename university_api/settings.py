@@ -54,6 +54,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:4173", # LOCAL BUILD
     "https://uni-frontend-lac.vercel.app",
     "https://skyblue-ibis-580217.hostingersite.com",
+    "https://addistemari.com",
 ]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
