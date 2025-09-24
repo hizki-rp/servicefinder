@@ -1,8 +1,8 @@
 from django.shortcuts import render
 
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count
 from rest_framework import generics, viewsets, status
+from django.db.models import Count, Q
 from django.contrib.auth.models import User, Group
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from django.urls import reverse
@@ -16,12 +16,15 @@ import uuid
 import requests
 import json
 import hmac
+import functools
+import operator
 import hashlib
 
 # Create your views here.
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from profiles.models import Profile
 from .models import University, UserDashboard
 from .permissions import HasActiveSubscription
 from .serializers import (
@@ -111,13 +114,36 @@ class DashboardView(APIView):
         serializer = UserDashboardSerializer(dashboard)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    def delete(self, request):
+        dashboard, created = UserDashboard.objects.get_or_create(user=request.user)
+        university_id = request.data.get('university_id')
+        list_name = request.data.get('list_name')
+
+        if not university_id or not list_name:
+            return Response({'error': 'university_id and list_name are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            university = University.objects.get(id=university_id)
+        except University.DoesNotExist:
+            return Response({'error': 'University not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        valid_lists = ['favorites', 'planning_to_apply', 'applied', 'accepted', 'visa_approved']
+        if list_name not in valid_lists:
+            return Response({'error': f'Invalid list name: {list_name}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        list_to_modify = getattr(dashboard, list_name)
+        list_to_modify.remove(university)
+
+        serializer = UserDashboardSerializer(dashboard)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
 
 class UniversityList(generics.ListAPIView):
-    queryset = University.objects.all()
+    # queryset is defined in get_queryset to allow for dynamic filtering
     serializer_class = UniversitySerializer
     permission_classes = [IsAuthenticated, HasActiveSubscription]
     pagination_class = StandardResultsSetPagination
@@ -131,6 +157,25 @@ class UniversityList(generics.ListAPIView):
     }
     search_fields = ['name', 'country', 'course_offered']
 
+    def dispatch(self, request, *args, **kwargs):
+        # Ensure a dashboard exists for the user before permission checks.
+        # This prevents a potential error in the `HasActiveSubscription`
+        # permission class if the user has no dashboard record yet.
+        if request.user and request.user.is_authenticated:
+            UserDashboard.objects.get_or_create(user=request.user)
+            Profile.objects.get_or_create(user=request.user)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        queryset = University.objects.all()
+        # Custom filter for intakes JSONField
+        intake_query = self.request.query_params.get('intakes')
+        if intake_query:
+            # This will filter universities where the 'intakes' JSON array contains an object
+            # with a 'name' key that contains the query string (case-insensitive).
+            queryset = queryset.filter(intakes__icontains=intake_query)
+        return queryset.order_by('name')
+
 class InitializeChapaPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -141,7 +186,7 @@ class InitializeChapaPaymentView(APIView):
         amount = "100"  # Example: 100 ETB for 1 month
 
         # Generate a unique transaction reference, embedding the user ID.
-        tx_ref = f"unifinder-{user.id}-{uuid.uuid4()}"
+        tx_ref = f"addistemari-{user.id}-{uuid.uuid4()}"
 
         chapa_secret_key = os.environ.get("CHAPA_SECRET_KEY")
         if not chapa_secret_key:
@@ -174,7 +219,7 @@ class InitializeChapaPaymentView(APIView):
             "tx_ref": tx_ref,
             "callback_url": callback_url,
             "return_url": return_url,
-            "customization[title]": "UNI-FINDER Subscription",
+            "customization[title]": "Addis Temari Subscription",
             "customization[description]": "1-Month Subscription Renewal",
         }
 
@@ -296,7 +341,7 @@ class PaymentWebhookView(APIView):
         if webhook_data.get("status") == "success":
             # 3. Process the payment
             try:
-                # tx_ref format: "unifinder-{user.id}-{uuid}"
+                # tx_ref format: "addistemari-{user.id}-{uuid}"
                 user_id = int(tx_ref.split('-')[1])
                 user = User.objects.get(id=user_id)
             except (IndexError, ValueError, User.DoesNotExist):
@@ -307,11 +352,11 @@ class PaymentWebhookView(APIView):
             dashboard, _ = UserDashboard.objects.get_or_create(user=user)
             
             # Extend subscription by 30 days
-            if dashboard.subscription_end_date and dashboard.subscription_end_date > timezone.now().date():
-                # If subscription is already active, extend from the end date
+            if dashboard.subscription_end_date:
+                # If there's an end date, extend from it, even if it's in the past.
                 dashboard.subscription_end_date += timedelta(days=30)
             else:
-                # If expired or not set, extend from today
+                # If no end date, start the subscription from today.
                 dashboard.subscription_end_date = timezone.now().date() + timedelta(days=30)
             
             dashboard.subscription_status = 'active'
@@ -363,15 +408,23 @@ class UniversityBulkCreate(APIView):
 
     def post(self, request, *args, **kwargs):
         file = request.FILES.get('file')
+        json_text = request.data.get('json_text')
+
         if not file:
-            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+            if not json_text:
+                return Response({'error': 'No file or JSON text provided'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            data = json.load(file)
-            serializer = UniversitySerializer(data=data, many=True)
-            if serializer.is_valid(raise_exception=True):
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            if file:
+                data = json.load(file)
+            else:
+                data = json.loads(json_text)
+            
+            is_many = isinstance(data, list)
+            serializer = UniversitySerializer(data=data, many=is_many)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         except json.JSONDecodeError:
             return Response({'error': 'Invalid JSON format'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:

@@ -9,6 +9,7 @@ class Profile(models.Model):
     bio = models.TextField(blank=True, null=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profile_pics/', null=True, blank=True)
+    preferred_intakes = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return f'{self.user.username} Profile'

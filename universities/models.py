@@ -12,8 +12,9 @@ class University(models.Model):
     course_offered = models.CharField(max_length=200, blank=True, default='')
     application_fee = models.DecimalField(max_digits=6, decimal_places=2)
     tuition_fee = models.DecimalField(max_digits=8, decimal_places=2)
-    deadline_undergrad = models.DateField(null=True, blank=True)
-    deadline_grad = models.DateField(null=True, blank=True)
+    # This field will store a list of intake objects, e.g.,
+    # [{"name": "September 2025", "deadline": "2025-06-30"}]
+    intakes = models.JSONField(default=list, blank=True, help_text="List of intake periods and their deadlines.")
     bachelor_programs = models.JSONField(default=list)
     masters_programs = models.JSONField(default=list)
     scholarships = models.JSONField(default=list)
@@ -51,3 +52,16 @@ def create_user_dashboard(sender, instance, created, **kwargs):
     """
     if created:
         UserDashboard.objects.create(user=instance)
+
+class UniversityJSONImport(models.Model):
+    """
+    A model to facilitate importing University data via JSON in the Django admin.
+    Each instance represents a single import action, storing the raw JSON.
+    """
+    json_data = models.TextField(help_text="Paste a single JSON object or a list of JSON objects here.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "University JSON Import"
+        verbose_name_plural = "University JSON Imports"
+        ordering = ['-created_at']
