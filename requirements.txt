@@ -32,8 +32,8 @@ tzdata==2025.2
 urllib3==2.5.0
 whitenoise==6.9.0
 beautifulsoup4==4.12.3
-extruct==0.16.0
-lxml==4.9.3
+extruct==0.13.0
+lxml==4.6.5
 w3lib==2.2.1
 selectolax==0.3.25
 tldextract==5.1.3
