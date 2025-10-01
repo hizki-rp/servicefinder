@@ -33,6 +33,8 @@ router.register(r'contacts', ContactViewSet, basename='contact')
 api_urlpatterns = [
     path('', include('universities.urls')),
     path('', include('profiles.urls')),
+    path('', include('notifications.urls')),
+    path('creator/', include('content_creator.urls')),
     path('', include(router.urls)), # for contacts app
 ]
 

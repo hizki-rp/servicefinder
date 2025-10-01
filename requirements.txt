@@ -31,3 +31,16 @@ sqlparse==0.5.3
 tzdata==2025.2
 urllib3==2.5.0
 whitenoise==6.9.0
+beautifulsoup4==4.12.3
+extruct
+lxml
+w3lib
+selectolax
+tldextract
+pycountry
+rapidfuzz
+requests-cache
+tenacity
+pydantic
+price-parser
+scrapegraph_py

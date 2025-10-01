@@ -14,6 +14,8 @@ urlpatterns = [
     path('universities/create/', views.create_university, name='university-create'),
     path('universities/<int:pk>/delete/', views.delete_university, name='university-delete'),
     path('universities/bulk_create/', views.UniversityBulkCreate.as_view(), name='university-bulk-create'),
+    path('universities/scrape/', views.UniversityScrapeView.as_view(), name='university-scrape'),
+    path('universities/seed_from_api/', views.UniversitySeedFromAPI.as_view(), name='university-seed-from-api'),
 
     # Public/User-facing University Views
     path('universities/', views.UniversityList.as_view(), name='university-list'),

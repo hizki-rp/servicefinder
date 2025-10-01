@@ -38,10 +38,12 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-yt)2uovn6ck=nwxdrvh#^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-# Use environment variables for allowed hosts in production
+# Use environment variables for allowed hosts
 ALLOWED_HOSTS_str = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1')
-# Strip whitespace from hosts to avoid issues with comma-separated lists with spaces
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_str.split(',')]
+
+# CSRF trusted origins for development
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
 
 # Trust the 'X-Forwarded-Proto' header from the reverse proxy (like Render)
 # This ensures request.build_absolute_uri() generates https:// URLs correctly.
@@ -54,6 +56,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:4173", # LOCAL BUILD
     "https://uni-frontend-lac.vercel.app",
     "https://skyblue-ibis-580217.hostingersite.com",
+    "https://addistemari.com",
 ]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
@@ -65,7 +68,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:4173", # LOCAL BUILD
     "https://uni-frontend-lac.vercel.app",
     "https://skyblue-ibis-580217.hostingersite.com",
-   
+    "https://addistemari.com",
 ]
 
 
@@ -89,9 +92,14 @@ INSTALLED_APPS = [
 
      'djoser',
      'rest_framework.authtoken',
+     'rest_framework_simplejwt',
      
      'contacts',
      'profiles',
+     'notifications',
+     'content_creator',
+     'django_celery_beat',
+     'django_celery_results',
 ]
 
 REST_FRAMEWORK = {
@@ -136,22 +144,24 @@ WSGI_APPLICATION = 'university_api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Default to SQLite for local development if DATABASE_URL is not set
+# Database configuration - use PostgreSQL for both local and production
 if 'DATABASE_URL' in os.environ:
+    # Production (Render) or local with DATABASE_URL
     DATABASES = {
         'default': dj_database_url.config(
-            # Render PostgreSQL requires SSL
             conn_max_age=600,
-            ssl_require=os.environ.get('DATABASE_SSL_MODE', 'require') == 'require'
+            ssl_require=os.environ.get('DATABASE_SSL_MODE', 'require') == 'require' if not DEBUG else False
         )
     }
 else:
+    # Local development fallback to SQLite (but PostgreSQL recommended)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+    print("⚠️  WARNING: Using SQLite locally. For production parity, use PostgreSQL with DATABASE_URL")
 
 
 # Password validation
@@ -212,3 +222,35 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # Media files (user uploads)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+#NOTIFICATION AND ASYNC TASKS SETTINGS
+
+# Email Configuration (for development, prints to console)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# In production, you would use a real SMTP service like SendGrid or Mailgun
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.sendgrid.net'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'apikey' # This is the string 'apikey' for SendGrid
+# EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY')
+# DEFAULT_FROM_EMAIL = 'noreply@addistemari.com'
+
+
+# Celery Configuration
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+# Celery Beat (for scheduled tasks)
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BEAT_SCHEDULE = {
+    'check-subscription-expiry-every-day': {
+        'task': 'profiles.tasks.check_subscription_expirations',
+        'schedule': 86400.0,  # Run once every 24 hours (in seconds)
+    },
+}
