@@ -42,6 +42,10 @@ DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 ALLOWED_HOSTS_str = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,uni-find-api.onrender.com')
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_str.split(',')]
 
+# Ensure Render domain is always included
+if 'uni-find-api.onrender.com' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('uni-find-api.onrender.com')
+
 # CSRF trusted origins for development
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
 
