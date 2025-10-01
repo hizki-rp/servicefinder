@@ -45,6 +45,6 @@ pydantic==2.10.4
 price-parser==0.3.4
 scrapegraph_py==1.30.0
 celery==5.4.0
-django-celery-beat==2.7.0
+django-celery-beat==2.8.0
 django-celery-results==2.5.1
 redis==5.2.1
