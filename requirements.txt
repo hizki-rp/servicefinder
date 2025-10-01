@@ -43,7 +43,7 @@ requests-cache==1.2.1
 tenacity==9.0.0
 pydantic==2.10.4
 price-parser==0.3.4
-scrapegraph_py==1.25.0
+scrapegraph_py==1.20.0
 celery==5.3.6
 django-celery-beat==2.8.0
 django-celery-results==2.5.1
