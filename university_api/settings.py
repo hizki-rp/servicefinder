@@ -162,21 +162,23 @@ if not os.getenv('IS_RENDER_BUILD'):
 # Database configuration - use PostgreSQL for both local and production
 if 'DATABASE_URL' in os.environ:
     # Production (Render) or local with DATABASE_URL
+    print(f"Using DATABASE_URL: {os.environ.get('DATABASE_URL', 'Not set')[:50]}...")
     DATABASES = {
         'default': dj_database_url.config(
+            default=os.environ.get('DATABASE_URL'),
             conn_max_age=600,
-            ssl_require=os.environ.get('DATABASE_SSL_MODE', 'require') == 'require' if not DEBUG else False
+            ssl_require=True if not DEBUG else False
         )
     }
 else:
     # Local development fallback to SQLite (but PostgreSQL recommended)
+    print("⚠️  WARNING: Using SQLite locally. For production parity, use PostgreSQL with DATABASE_URL")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-    print("⚠️  WARNING: Using SQLite locally. For production parity, use PostgreSQL with DATABASE_URL")
 
 
 # Password validation
