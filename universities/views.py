@@ -244,28 +244,20 @@ class InitializeChapaPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            user = request.user
-            print(f"DEBUG: User: {user.username}, Email: {user.email}")
-            
-            # For simplicity, we define a fixed amount for a 1-month subscription.
-            # In a real app, this might come from a product model or settings.
-            amount = "100"  # Example: 100 ETB for 1 month
+        user = request.user
+        # For simplicity, we define a fixed amount for a 1-month subscription.
+        # In a real app, this might come from a product model or settings.
+        amount = "100"  # Example: 100 ETB for 1 month
 
-            # Generate a unique transaction reference, embedding the user ID.
-            tx_ref = f"addistemari-{user.id}-{uuid.uuid4()}"
-            print(f"DEBUG: tx_ref: {tx_ref}")
+        # Generate a unique transaction reference, embedding the user ID.
+        tx_ref = f"unifinder-{user.id}-{uuid.uuid4()}"
 
-            chapa_secret_key = os.environ.get("CHAPA_SECRET_KEY")
-            print(f"DEBUG: Secret key exists: {bool(chapa_secret_key)}")
-            if not chapa_secret_key:
-                return Response(
-                    {"status": "error", "message": "Chapa secret key is not configured."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-        except Exception as e:
-            print(f"DEBUG: Error in initial setup: {e}")
-            return Response({"status": "error", "message": f"Setup error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        chapa_secret_key = os.environ.get("CHAPA_SECRET_KEY")
+        if not chapa_secret_key:
+            return Response(
+                {"status": "error", "message": "Chapa secret key is not configured."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         headers = {
             "Authorization": f"Bearer {chapa_secret_key}",
@@ -291,18 +283,15 @@ class InitializeChapaPaymentView(APIView):
             "tx_ref": tx_ref,
             "callback_url": callback_url,
             "return_url": return_url,
-            "customization[title]": "Addis Temari Subscription",
+            "customization[title]": "UNI-FINDER Subscription",
             "customization[description]": "1-Month Subscription Renewal",
         }
 
         try:
             chapa_init_url = "https://api.chapa.co/v1/transaction/initialize"
-            print(f"DEBUG: Making request to Chapa with payload: {payload}")
             response = requests.post(chapa_init_url, headers=headers, json=payload)
-            print(f"DEBUG: Chapa response status: {response.status_code}")
             response.raise_for_status()
             response_data = response.json()
-            print(f"DEBUG: Chapa response data: {response_data}")
 
             if response_data.get("status") == "success":
                 return Response({
@@ -416,7 +405,7 @@ class PaymentWebhookView(APIView):
         if webhook_data.get("status") == "success":
             # 3. Process the payment
             try:
-                # tx_ref format: "addistemari-{user.id}-{uuid}"
+                # tx_ref format: "unifinder-{user.id}-{uuid}"
                 user_id = int(tx_ref.split('-')[1])
                 user = User.objects.get(id=user_id)
             except (IndexError, ValueError, User.DoesNotExist):
@@ -427,11 +416,11 @@ class PaymentWebhookView(APIView):
             dashboard, _ = UserDashboard.objects.get_or_create(user=user)
             
             # Extend subscription by 30 days
-            if dashboard.subscription_end_date:
-                # If there's an end date, extend from it, even if it's in the past.
+            if dashboard.subscription_end_date and dashboard.subscription_end_date > timezone.now().date():
+                # If subscription is already active, extend from the end date
                 dashboard.subscription_end_date += timedelta(days=30)
             else:
-                # If no end date, start the subscription from today.
+                # If expired or not set, extend from today
                 dashboard.subscription_end_date = timezone.now().date() + timedelta(days=30)
             
             dashboard.subscription_status = 'active'
