@@ -44,3 +44,4 @@ tenacity
 pydantic
 price-parser
 scrapegraph_py
+celery

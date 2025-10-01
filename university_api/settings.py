@@ -140,6 +140,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'university_api.wsgi.application'
 
+# Set MEDIA_ROOT to the mount path of your persistent disk
+MEDIA_ROOT = os.path.join('/var/data', 'media')
+MEDIA_URL = '/media/'
+
+# The persistent disk is not available during the build. To avoid build errors
+# caused by a missing directory, disable file storage checks during the build
+# phase. Use an environment variable like IS_RENDER_BUILD to control this.
+if not os.getenv('IS_RENDER_BUILD'):
+    # Configure your media file storage settings here
+    pass
+
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
