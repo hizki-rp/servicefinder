@@ -7,10 +7,10 @@ defusedxml==0.7.1
 dj-database-url==3.0.1
 Django==5.2.5
 django-cors-headers==4.7.0
-django-filter==25.1
-djangorestframework==3.16.1
-djangorestframework_simplejwt==5.5.1
-djoser==2.3.3
+django-filter==24.3
+djangorestframework==3.15.2
+djangorestframework_simplejwt==5.4.0
+djoser==2.2.3
 gunicorn==23.0.0
 idna==3.10
 oauthlib==3.3.1
@@ -43,8 +43,8 @@ requests-cache==1.2.1
 tenacity==9.0.0
 pydantic==2.10.4
 price-parser==0.3.4
-scrapegraph_py==1.30.0
-celery==5.4.0
+scrapegraph_py==1.25.0
+celery==5.3.6
 django-celery-beat==2.8.0
 django-celery-results==2.5.1
 redis==5.2.1
