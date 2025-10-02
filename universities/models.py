@@ -41,6 +41,29 @@ class UserDashboard(models.Model):
         max_length=10, choices=SUBSCRIPTION_CHOICES, default='none'
     )
     subscription_end_date = models.DateField(null=True, blank=True)
+    total_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    months_subscribed = models.IntegerField(default=0)
+    is_verified = models.BooleanField(default=False)
+    
+    def update_subscription(self, amount_paid, monthly_price=500):
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        self.total_paid += amount_paid
+        months_to_add = int(amount_paid // monthly_price)
+        
+        if months_to_add > 0:
+            self.months_subscribed += months_to_add
+            self.is_verified = True
+            self.subscription_status = 'active'
+            
+            if self.subscription_end_date and self.subscription_end_date > timezone.now().date():
+                self.subscription_end_date += timedelta(days=30 * months_to_add)
+            else:
+                self.subscription_end_date = timezone.now().date() + timedelta(days=30 * months_to_add)
+        
+        self.save()
+        return months_to_add
 
     def __str__(self):
         return f"{self.user.username}'s Dashboard"

@@ -133,10 +133,25 @@ class UserDashboardSerializer(serializers.ModelSerializer):
     visa_approved = DashboardUniversitySerializer(many=True, read_only=True)
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
+    should_prompt_payment = serializers.SerializerMethodField()
+
+    def get_should_prompt_payment(self, obj):
+        from django.utils import timezone
+        user = obj.user
+        
+        # Admins and superusers never need to pay
+        if user.is_superuser or user.is_staff or user.groups.filter(name='admin').exists():
+            return False
+        
+        # Check if user has verified active subscription
+        if obj.is_verified and obj.subscription_end_date and obj.subscription_end_date >= timezone.now().date():
+            return False
+        
+        return True
 
     class Meta:
         model = UserDashboard
-        fields = ['first_name', 'last_name', 'favorites', 'planning_to_apply', 'applied', 'accepted', 'visa_approved', 'subscription_status', 'subscription_end_date']
+        fields = ['first_name', 'last_name', 'favorites', 'planning_to_apply', 'applied', 'accepted', 'visa_approved', 'subscription_status', 'subscription_end_date', 'total_paid', 'months_subscribed', 'is_verified', 'should_prompt_payment']
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):

@@ -469,19 +469,25 @@ class PaymentWebhookView(APIView):
                 chapa_reference=webhook_data.get('reference', '')
             )
             
-            # 5. Update user's dashboard
+            # 5. Process payment and update subscription
             dashboard, _ = UserDashboard.objects.get_or_create(user=user)
             
-            # Extend subscription by 30 days
-            if dashboard.subscription_end_date and dashboard.subscription_end_date > timezone.now().date():
-                # If subscription is already active, extend from the end date
-                dashboard.subscription_end_date += timedelta(days=30)
-            else:
-                # If expired or not set, extend from today
-                dashboard.subscription_end_date = timezone.now().date() + timedelta(days=30)
+            # Process payment with new system
+            months_added = dashboard.update_subscription(500.00, monthly_price=500)
             
-            dashboard.subscription_status = 'active'
-            dashboard.save()
+            if months_added == 0:
+                # Notify admin for manual review
+                from django.core.mail import mail_admins
+                try:
+                    mail_admins(
+                        subject="Payment needs review",
+                        message=f"User {user.username} paid 500 ETB, but system couldn't process full month. Please verify."
+                    )
+                except Exception as e:
+                    print(f"Failed to send admin email: {e}")
+                
+                dashboard.is_verified = False
+                dashboard.save()
 
             print(f"Successfully processed payment for user {user.id}. New expiry: {dashboard.subscription_end_date}")
             print(f"Payment recorded: {tx_ref} - 500 ETB")
