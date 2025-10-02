@@ -143,8 +143,16 @@ class UserDashboardSerializer(serializers.ModelSerializer):
         if user.is_superuser or user.is_staff or user.groups.filter(name='admin').exists():
             return False
         
+        # Fallback for existing users before migration
+        if not hasattr(obj, 'is_verified'):
+            return not obj.subscription_end_date
+        
         # Check if user has verified active subscription
         if obj.is_verified and obj.subscription_end_date and obj.subscription_end_date >= timezone.now().date():
+            return False
+        
+        # For existing users with subscription_end_date but no is_verified field
+        if obj.subscription_end_date and obj.subscription_end_date >= timezone.now().date():
             return False
         
         return True
