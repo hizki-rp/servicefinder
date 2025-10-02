@@ -277,7 +277,15 @@ class InitializeChapaPaymentView(APIView):
         # Override for production if using localhost
         if 'localhost' in frontend_base_url and 'render.com' in backend_base_url:
             frontend_base_url = "https://addistemari.com"
-        return_url = frontend_base_url + "/dashboard"
+        
+        # Check if user has active subscription to determine return URL
+        dashboard, _ = UserDashboard.objects.get_or_create(user=user)
+        if dashboard.subscription_status == 'expired' or not dashboard.subscription_end_date:
+            # New user or expired subscription - redirect to payment success
+            return_url = frontend_base_url + "/payment-success"
+        else:
+            # Existing subscriber - redirect to dashboard
+            return_url = frontend_base_url + "/dashboard"
         payload = {
             "amount": amount,
             "currency": "ETB",
