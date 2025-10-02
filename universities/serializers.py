@@ -22,6 +22,12 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "email", "password", "first_name", "last_name", "phone_number"]
         extra_kwargs = {"password": {"write_only": True}}
 
+    def validate_username(self, value):
+        # Check for case-insensitive username uniqueness
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Username taken")
+        return value.lower()  # Store usernames in lowercase
+
     def create(self, validated_data):
         phone_number = validated_data.pop('phone_number', None)
         # Use create_user to properly hash the password
@@ -156,13 +162,14 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
                 # Fall through to the default authentication method.
                 pass
 
-        # If not authenticated by email, or if it wasn't an email, try default authentication.
+        # If not authenticated by email, or if it wasn't an email, try case-insensitive username authentication.
         if not user:
-            user = authenticate(
-                request=self.context.get('request'),
-                username=username_or_email,
-                password=password
-            )
+            try:
+                user_obj = User.objects.get(username__iexact=username_or_email)
+                if user_obj.check_password(password):
+                    user = user_obj
+            except User.DoesNotExist:
+                pass
 
         if not user or not user.is_active:
             raise serializers.ValidationError('No active account found with the given credentials.')

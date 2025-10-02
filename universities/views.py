@@ -40,6 +40,7 @@ except Exception:
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from profiles.models import Profile
+import random
 from .models import University, UserDashboard
 from .permissions import HasActiveSubscription
 from .serializers import (
@@ -278,6 +279,24 @@ class InitializeChapaPaymentView(APIView):
         if 'localhost' in frontend_base_url and 'render.com' in backend_base_url:
             frontend_base_url = "https://addistemari.com"
         
+        # Check if user already has a pending payment to prevent duplicates
+        try:
+            from payments.models import Payment
+            recent_payment = Payment.objects.filter(
+                user=user, 
+                status='success',
+                payment_date__gte=timezone.now() - timedelta(minutes=10)
+            ).first()
+            
+            if recent_payment:
+                return Response({
+                    "status": "error",
+                    "message": "You have already made a payment recently. Please wait before making another payment."
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Error checking recent payments: {e}")
+            # Continue with payment initialization if payment check fails
+        
         # Check if user has active subscription to determine return URL
         dashboard, _ = UserDashboard.objects.get_or_create(user=user)
         if dashboard.subscription_status == 'expired' or not dashboard.subscription_end_date:
@@ -321,8 +340,11 @@ class InitializeChapaPaymentView(APIView):
 
         except requests.exceptions.RequestException as e:
             print(f"DEBUG: Chapa request failed: {e}")
-            return Response({"status": "error", "message": f"Network error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"DEBUG: Response status: {e.response.status_code if hasattr(e, 'response') and e.response else 'No response'}")
+            print(f"DEBUG: Response text: {e.response.text if hasattr(e, 'response') and e.response else 'No response'}")
+            return Response({"status": "error", "message": f"Payment service error: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            print(f"DEBUG: Unexpected error: {e}")
             return Response({"status": "error", "message": f"An unexpected error occurred: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class GroupList(generics.ListAPIView):
@@ -432,11 +454,16 @@ class PaymentWebhookView(APIView):
                 print(f"Could not find user from tx_ref: {tx_ref}")
                 return Response({'status': 'error', 'message': 'Invalid transaction reference format.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 4. Record the payment
+            # 4. Check for duplicate payment and record if new
             from payments.models import Payment
+            existing_payment = Payment.objects.filter(tx_ref=tx_ref).first()
+            if existing_payment:
+                print(f"Payment {tx_ref} already processed. Skipping.")
+                return Response({'status': 'already processed'}, status=status.HTTP_200_OK)
+            
             Payment.objects.create(
                 user=user,
-                amount=500.00,  # Match the payment amount
+                amount=500.00,
                 tx_ref=tx_ref,
                 status='success',
                 chapa_reference=webhook_data.get('reference', '')
@@ -1038,3 +1065,35 @@ def _tld_country_guess(hostname):
         except Exception:
             pass
     return ''
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def suggest_username(request):
+    first_name = request.data.get('first_name', '').strip().lower()
+    last_name = request.data.get('last_name', '').strip().lower()
+    
+    if not first_name:
+        return Response({'suggestions': []}, status=status.HTTP_400_BAD_REQUEST)
+    
+    suggestions = []
+    base_names = [
+        first_name,
+        f"{first_name}{last_name}" if last_name else first_name,
+        f"{first_name}_{last_name}" if last_name else f"{first_name}_user",
+    ]
+    
+    for base in base_names:
+        for i in range(3):
+            if i == 0:
+                candidate = base
+            else:
+                candidate = f"{base}{random.randint(10, 999)}"
+            
+            if not User.objects.filter(username__iexact=candidate).exists():
+                suggestions.append(candidate)
+                if len(suggestions) >= 5:
+                    break
+        if len(suggestions) >= 5:
+            break
+    
+    return Response({'suggestions': suggestions[:5]})

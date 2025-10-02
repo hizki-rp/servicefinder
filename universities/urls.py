@@ -29,4 +29,7 @@ urlpatterns = [
     # Admin specific
     path('groups/', views.GroupList.as_view(), name='group-list'),
     path('stats/', views.AdminStatsView.as_view(), name='admin-stats'),
+    
+    # Username suggestions
+    path('suggest-username/', views.suggest_username, name='suggest-username'),
 ]
