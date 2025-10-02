@@ -247,7 +247,7 @@ class InitializeChapaPaymentView(APIView):
         user = request.user
         # For simplicity, we define a fixed amount for a 1-month subscription.
         # In a real app, this might come from a product model or settings.
-        amount = "100"  # Example: 100 ETB for 1 month
+        amount = "500"  # 500 ETB for 1 month
 
         # Generate a unique transaction reference, embedding the user ID.
         tx_ref = f"unifinder-{user.id}-{uuid.uuid4()}"
@@ -412,7 +412,17 @@ class PaymentWebhookView(APIView):
                 print(f"Could not find user from tx_ref: {tx_ref}")
                 return Response({'status': 'error', 'message': 'Invalid transaction reference format.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 4. Update user's dashboard
+            # 4. Record the payment
+            from payments.models import Payment
+            Payment.objects.create(
+                user=user,
+                amount=500.00,  # Match the payment amount
+                tx_ref=tx_ref,
+                status='success',
+                chapa_reference=webhook_data.get('reference', '')
+            )
+            
+            # 5. Update user's dashboard
             dashboard, _ = UserDashboard.objects.get_or_create(user=user)
             
             # Extend subscription by 30 days
@@ -427,6 +437,7 @@ class PaymentWebhookView(APIView):
             dashboard.save()
 
             print(f"Successfully processed payment for user {user.id}. New expiry: {dashboard.subscription_end_date}")
+            print(f"Payment recorded: {tx_ref} - 500 ETB")
             
             # 5. Acknowledge receipt to Chapa
             return Response({'status': 'success'}, status=status.HTTP_200_OK)

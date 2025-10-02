@@ -102,6 +102,7 @@ INSTALLED_APPS = [
      'profiles',
      'notifications',
      'content_creator',
+     'payments',
      'django_celery_beat',
      'django_celery_results',
 ]
