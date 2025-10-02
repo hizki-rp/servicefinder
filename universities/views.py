@@ -474,20 +474,14 @@ class PaymentWebhookView(APIView):
             dashboard, _ = UserDashboard.objects.get_or_create(user=user)
             
             # Process payment with new system
-            months_added = dashboard.update_subscription(500.00, monthly_price=500)
-            
-            if months_added == 0:
-                # Notify admin for manual review
-                from django.core.mail import mail_admins
-                try:
-                    mail_admins(
-                        subject="Payment needs review",
-                        message=f"User {user.username} paid 500 ETB, but system couldn't process full month. Please verify."
-                    )
-                except Exception as e:
-                    print(f"Failed to send admin email: {e}")
-                
-                dashboard.is_verified = False
+            try:
+                months_added = dashboard.update_subscription(500.00, monthly_price=500)
+                print(f"Payment processed: {months_added} months added for user {user.username}")
+            except Exception as e:
+                print(f"Error updating subscription: {e}")
+                # Fallback to old method
+                dashboard.subscription_status = 'active'
+                dashboard.subscription_end_date = timezone.now().date() + timedelta(days=30)
                 dashboard.save()
 
             print(f"Successfully processed payment for user {user.id}. New expiry: {dashboard.subscription_end_date}")
