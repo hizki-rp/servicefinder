@@ -273,6 +273,9 @@ class InitializeChapaPaymentView(APIView):
 
         # Ensure no double slashes in the return URL and use an environment variable.
         frontend_base_url = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip('/')
+        # Override for production if using localhost
+        if 'localhost' in frontend_base_url and 'render.com' in backend_base_url:
+            frontend_base_url = "https://addistemari.com"
         return_url = frontend_base_url + "/dashboard"
         payload = {
             "amount": amount,
