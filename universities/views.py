@@ -280,22 +280,23 @@ class InitializeChapaPaymentView(APIView):
             frontend_base_url = "https://addistemari.com"
         
         # Check if user already has a pending payment to prevent duplicates
-        try:
-            from payments.models import Payment
-            recent_payment = Payment.objects.filter(
-                user=user, 
-                status='success',
-                payment_date__gte=timezone.now() - timedelta(minutes=10)
-            ).first()
-            
-            if recent_payment:
-                return Response({
-                    "status": "error",
-                    "message": "You have already made a payment recently. Please wait before making another payment."
-                }, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            print(f"Error checking recent payments: {e}")
-            # Continue with payment initialization if payment check fails
+        # Skip recent payment check for now to avoid errors
+        # try:
+        #     from payments.models import Payment
+        #     recent_payment = Payment.objects.filter(
+        #         user=user, 
+        #         status='success',
+        #         payment_date__gte=timezone.now() - timedelta(minutes=10)
+        #     ).first()
+        #     
+        #     if recent_payment:
+        #         return Response({
+        #             "status": "error",
+        #             "message": "You have already made a payment recently. Please wait before making another payment."
+        #         }, status=status.HTTP_400_BAD_REQUEST)
+        # except Exception as e:
+        #     print(f"Error checking recent payments: {e}")
+        #     # Continue with payment initialization if payment check fails
         
         # Check if user has active subscription to determine return URL
         dashboard, _ = UserDashboard.objects.get_or_create(user=user)
