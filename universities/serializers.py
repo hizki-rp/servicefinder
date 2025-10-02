@@ -144,7 +144,10 @@ class UserDashboardSerializer(serializers.ModelSerializer):
             return False
         
         # Fallback for existing users before migration
-        if not hasattr(obj, 'is_verified'):
+        try:
+            if not hasattr(obj, 'is_verified') or obj.is_verified is None:
+                return not obj.subscription_end_date
+        except AttributeError:
             return not obj.subscription_end_date
         
         # Check if user has verified active subscription
