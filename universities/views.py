@@ -270,6 +270,7 @@ class InitializeChapaPaymentView(APIView):
         # It's more robust to use an environment variable for the base URL.
         backend_base_url = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip('/')
         callback_url = backend_base_url + reverse('chapa_webhook')
+        print(f"DEBUG: Webhook URL being sent to Chapa: {callback_url}")
 
         # Ensure no double slashes in the return URL and use an environment variable.
         frontend_base_url = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip('/')
@@ -292,9 +293,12 @@ class InitializeChapaPaymentView(APIView):
 
         try:
             chapa_init_url = "https://api.chapa.co/v1/transaction/initialize"
+            print(f"DEBUG: Sending payment request to Chapa with callback: {callback_url}")
+            print(f"DEBUG: Return URL: {return_url}")
             response = requests.post(chapa_init_url, headers=headers, json=payload)
             response.raise_for_status()
             response_data = response.json()
+            print(f"DEBUG: Chapa response: {response_data}")
 
             if response_data.get("status") == "success":
                 return Response({
@@ -308,6 +312,7 @@ class InitializeChapaPaymentView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
         except requests.exceptions.RequestException as e:
+            print(f"DEBUG: Chapa request failed: {e}")
             return Response({"status": "error", "message": f"Network error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({"status": "error", "message": f"An unexpected error occurred: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -347,9 +352,13 @@ class PaymentWebhookView(APIView):
 
     def post(self, request, *args, **kwargs):
         # --- Enhanced Logging for Debugging ---
-        print("--- Chapa Webhook Received ---")
-        print(f"Headers: {request.headers}")
+        print("=== CHAPA WEBHOOK RECEIVED ===")
+        print(f"Method: {request.method}")
+        print(f"Path: {request.path}")
+        print(f"Headers: {dict(request.headers)}")
         print(f"Raw Body: {request.body.decode('utf-8', errors='ignore')}")
+        print(f"Parsed Data: {request.data}")
+        print(f"Environment CHAPA_WEBHOOK_SECRET exists: {bool(os.environ.get('CHAPA_WEBHOOK_SECRET'))}")
         # --- End Enhanced Logging ---
 
         # 1. Webhook Signature Verification
