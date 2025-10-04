@@ -272,3 +272,6 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 86400.0,  # Run once every 24 hours (in seconds)
     },
 }
+
+# ScholarshipOwl API Configuration
+SCHOLARSHIPOWL_API_KEY = os.environ.get('SCHOLARSHIPOWL_API_KEY')

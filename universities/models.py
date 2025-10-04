@@ -88,3 +88,14 @@ class UniversityJSONImport(models.Model):
         verbose_name = "University JSON Import"
         verbose_name_plural = "University JSON Imports"
         ordering = ['-created_at']
+
+class ScholarshipResult(models.Model):
+    country = models.CharField(max_length=100, blank=True)
+    scholarships_data = models.JSONField(default=list)
+    fetched_at = models.DateTimeField(auto_now_add=True)
+    total_count = models.IntegerField(default=0)
+    
+    class Meta:
+        verbose_name = "Scholarship Result"
+        verbose_name_plural = "Scholarship Results"
+        ordering = ['-fetched_at']

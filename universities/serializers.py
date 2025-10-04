@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import University, UserDashboard
+from .models import University, UserDashboard, ScholarshipResult
 from django.contrib.auth.models import User, Group
 from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
@@ -230,3 +230,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['last_name'] = user.last_name
 
         return token
+
+class ScholarshipResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScholarshipResult
+        fields = ['id', 'country', 'total_count', 'fetched_at', 'scholarships_data']

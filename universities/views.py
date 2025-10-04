@@ -41,11 +41,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from profiles.models import Profile
 import random
-from .models import University, UserDashboard
+from .models import University, UserDashboard, ScholarshipResult
 from .permissions import HasActiveSubscription
 from .serializers import (
     UniversitySerializer, UserSerializer, UserDetailSerializer, 
-    UserDashboardSerializer, GroupSerializer, MyTokenObtainPairSerializer
+    UserDashboardSerializer, GroupSerializer, MyTokenObtainPairSerializer,
+    ScholarshipResultSerializer
 )
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import filters as drf_filters
@@ -54,6 +55,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.decorators import action
 import time
 from urllib.parse import urlparse
+from .scholarship_service import ScholarshipOwlService
 
 # Enable a simple HTTP cache to stabilize repeated scrapes
 requests_cache.install_cache('scrape_cache', backend='sqlite', expire_after=86400)
@@ -112,6 +114,74 @@ class UserViewSet(viewsets.ModelViewSet):
         detail_serializer = UserDetailSerializer(user, context={'request': request})
         headers = self.get_success_headers(detail_serializer.data)
         return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_scholarships(request):
+    """Get scholarships from ScholarshipOwl API"""
+    country = request.GET.get('country', '')
+    limit = int(request.GET.get('limit', 10))
+    
+    service = ScholarshipOwlService()
+    scholarships = service.get_scholarships(country=country, limit=limit)
+    formatted = service.format_for_university(scholarships)
+    
+    # Save to database for admin viewing
+    if scholarships:
+        ScholarshipResult.objects.create(
+            country=country,
+            scholarships_data=formatted,
+            total_count=len(formatted)
+        )
+    
+    return Response({'scholarships': formatted})
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def scholarship_results_list(request):
+    """List all ScholarshipOwl API results for admin"""
+    try:
+        results = ScholarshipResult.objects.all().order_by('-fetched_at')
+        data = []
+        for result in results:
+            data.append({
+                'id': result.id,
+                'country': result.country,
+                'total_count': result.total_count,
+                'fetched_at': result.fetched_at.isoformat(),
+                'scholarships_data': result.scholarships_data
+            })
+        return Response(data)
+    except Exception as e:
+        # Return empty list if table doesn't exist or other error
+        return Response([])
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def create_sample_scholarships(request):
+    """Create sample scholarship data for testing"""
+    sample_data = [
+        {
+            'name': 'Merit Scholarship for International Students',
+            'coverage': 'Full tuition',
+            'eligibility': 'GPA 3.5+, International students',
+            'link': 'https://example.com/scholarship1'
+        },
+        {
+            'name': 'STEM Excellence Award',
+            'coverage': '$10,000',
+            'eligibility': 'STEM majors, US citizens',
+            'link': 'https://example.com/scholarship2'
+        }
+    ]
+    
+    ScholarshipResult.objects.create(
+        country='Canada',
+        scholarships_data=sample_data,
+        total_count=len(sample_data)
+    )
+    
+    return Response({'message': 'Sample data created'})
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser]) # Example: Only admins can create

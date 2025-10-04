@@ -32,4 +32,9 @@ urlpatterns = [
     
     # Username suggestions
     path('suggest-username/', views.suggest_username, name='suggest-username'),
+    
+    # Scholarships
+    path('scholarships/', views.get_scholarships, name='get-scholarships'),
+    path('scholarship-results/', views.scholarship_results_list, name='scholarship-results'),
+    path('create-sample-scholarships/', views.create_sample_scholarships, name='create-sample-scholarships'),
 ]
