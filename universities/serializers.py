@@ -119,6 +119,7 @@ class UniversitySerializer(serializers.ModelSerializer):
     class Meta:
         model = University
         fields = '__all__'
+        extra_kwargs = {'id': {'read_only': True}}
 
 class DashboardUniversitySerializer(serializers.ModelSerializer):
     class Meta:

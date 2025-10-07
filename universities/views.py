@@ -613,15 +613,54 @@ class UniversityBulkCreate(APIView):
             else:
                 data = json.loads(json_text)
             
-            is_many = isinstance(data, list)
-            serializer = UniversitySerializer(data=data, many=is_many)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Process data and create universities directly
+            created_universities = []
+            skipped_count = 0
+            
+            if not isinstance(data, list):
+                data = [data]
+            
+            for item in data:
+                # Remove id field completely
+                item.pop('id', None)
+                
+                # Skip if university with same name already exists
+                if University.objects.filter(name=item.get('name', '')).exists():
+                    skipped_count += 1
+                    continue
+                
+                # Create university directly using ORM
+                university = University.objects.create(
+                    name=item.get('name', ''),
+                    country=item.get('country', ''),
+                    city=item.get('city', ''),
+                    course_offered=item.get('course_offered', ''),
+                    application_fee=item.get('application_fee', '0.00'),
+                    tuition_fee=item.get('tuition_fee', '0.00'),
+                    intakes=item.get('intakes', []),
+                    bachelor_programs=item.get('bachelor_programs', []),
+                    masters_programs=item.get('masters_programs', []),
+                    scholarships=item.get('scholarships', []),
+                    university_link=item.get('university_link', ''),
+                    application_link=item.get('application_link', ''),
+                    description=item.get('description', '')
+                )
+                created_universities.append(university)
+            
+            if not created_universities:
+                return Response({'message': f'No new universities created. {skipped_count} already exist.'}, status=status.HTTP_200_OK)
+            
+            # Serialize the created universities for response
+            serializer = UniversitySerializer(created_universities, many=True)
+            return Response({
+                'created': len(created_universities),
+                'skipped': skipped_count,
+                'data': serializer.data
+            }, status=status.HTTP_201_CREATED)
         except json.JSONDecodeError:
             return Response({'error': 'Invalid JSON format'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'Bulk creation failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 class UniversityScrapeView(APIView):
     permission_classes = [IsAdminUser]

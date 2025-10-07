@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib import messages
 from django.utils.html import format_html
+from django.db import transaction
 from .models import University, UserDashboard, UniversityJSONImport, ScholarshipResult
 from .serializers import UniversitySerializer
 from .scholarship_service import ScholarshipOwlService
@@ -30,14 +31,46 @@ class UniversityJSONImportAdmin(admin.ModelAdmin):
 
         try:
             data = json.loads(json_data_str)
-            is_many = isinstance(data, list)
             
-            serializer = UniversitySerializer(data=data, many=is_many)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
+            with transaction.atomic():
+                # Process data and create universities directly
+                created_count = 0
+                skipped_count = 0
+                
+                if not isinstance(data, list):
+                    data = [data]
+                
+                for item in data:
+                    # Remove id field completely
+                    item.pop('id', None)
+                    
+                    # Skip if university with same name already exists
+                    if University.objects.filter(name=item.get('name', '')).exists():
+                        skipped_count += 1
+                        continue
+                    
+                    # Create university directly using ORM
+                    University.objects.create(
+                        name=item.get('name', ''),
+                        country=item.get('country', ''),
+                        city=item.get('city', ''),
+                        course_offered=item.get('course_offered', ''),
+                        application_fee=item.get('application_fee', '0.00'),
+                        tuition_fee=item.get('tuition_fee', '0.00'),
+                        intakes=item.get('intakes', []),
+                        bachelor_programs=item.get('bachelor_programs', []),
+                        masters_programs=item.get('masters_programs', []),
+                        scholarships=item.get('scholarships', []),
+                        university_link=item.get('university_link', ''),
+                        application_link=item.get('application_link', ''),
+                        description=item.get('description', '')
+                    )
+                    created_count += 1
             
-            count = len(data) if is_many else 1
-            self.message_user(request, f"Successfully imported {count} university/universities.", level=messages.SUCCESS)
+            if created_count > 0:
+                self.message_user(request, f"Successfully imported {created_count} university/universities. {skipped_count} skipped (already exist).", level=messages.SUCCESS)
+            else:
+                self.message_user(request, f"No new universities created. {skipped_count} already exist.", level=messages.WARNING)
         except Exception as e:
             # This will catch JSONDecodeError, serializer validation errors, etc.
             self.message_user(request, f"An error occurred during import: {e}", level=messages.ERROR)
