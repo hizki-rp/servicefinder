@@ -42,6 +42,8 @@ from rest_framework.response import Response
 from profiles.models import Profile
 import random
 from .models import University, UserDashboard, ScholarshipResult
+from django.core.mail import send_mail
+from django.conf import settings
 from .permissions import HasActiveSubscription
 from .serializers import (
     UniversitySerializer, UserSerializer, UserDetailSerializer, 
@@ -293,22 +295,46 @@ class UniversityList(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = University.objects.all()
-        # Custom filter for intakes JSONField
-        intake_query = self.request.query_params.get('intakes')
+        
+        # Custom filter for country to handle US variations
+        country_query = self.request.query_params.get('country__icontains')
+        if country_query:
+            if country_query.lower() in ['usa', 'us']:
+                queryset = queryset.filter(
+                    Q(country__icontains='United States') |
+                    Q(country__icontains='USA') |
+                    Q(country__icontains='US')
+                )
+            else:
+                queryset = queryset.filter(country__icontains=country_query)
+        
+        # Custom filter for intakes JSONField with seasonal mapping
+        intake_query = self.request.query_params.get('intake')
         if intake_query:
-            # The `intakes__contains=[{'name': intake_query}]` lookup is specific to
-            # PostgreSQL and will raise a NotSupportedError on SQLite.
-            # To support both, we can use a more general approach.
-            # This query checks if the `intakes` JSON array contains any object
-            # where the `name` key's value contains the intake_query string.
-            # This is slightly less performant on PostgreSQL than the original query
-            # but has the advantage of working across different database backends.
-            try:
-                queryset = queryset.filter(intakes__name__icontains=intake_query)
-            except exceptions.FieldError:
-                # Fallback for older Django/DB versions or complex cases
-                # This is a broad search and less accurate but safe.
-                queryset = queryset.filter(intakes__icontains=intake_query)
+            # Map months to seasons and common intake terms
+            month_to_season = {
+                'January': ['January', 'Winter', 'Spring'],
+                'February': ['February', 'Winter', 'Spring'], 
+                'March': ['March', 'Spring'],
+                'April': ['April', 'Spring'],
+                'May': ['May', 'Spring', 'Summer'],
+                'June': ['June', 'Summer'],
+                'July': ['July', 'Summer'],
+                'August': ['August', 'Summer', 'Fall'],
+                'September': ['September', 'Fall', 'Autumn'],
+                'October': ['October', 'Fall', 'Autumn'],
+                'November': ['November', 'Fall', 'Autumn', 'Winter'],
+                'December': ['December', 'Winter']
+            }
+            
+            search_terms = month_to_season.get(intake_query, [intake_query])
+            
+            # Build query for multiple search terms
+            intake_filter = Q()
+            for term in search_terms:
+                intake_filter |= Q(intakes__icontains=term)
+            
+            queryset = queryset.filter(intake_filter)
         return queryset.order_by('name')
 
 class InitializeChapaPaymentView(APIView):
@@ -552,6 +578,7 @@ class PaymentWebhookView(APIView):
                 # Fallback to old method
                 dashboard.subscription_status = 'active'
                 dashboard.subscription_end_date = timezone.now().date() + timedelta(days=30)
+                dashboard.is_verified = True
                 dashboard.save()
 
             print(f"Successfully processed payment for user {user.id}. New expiry: {dashboard.subscription_end_date}")
@@ -600,6 +627,8 @@ class UniversityBulkCreate(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request, *args, **kwargs):
+        from django.db import connection
+        
         file = request.FILES.get('file')
         json_text = request.data.get('json_text')
 
@@ -613,6 +642,10 @@ class UniversityBulkCreate(APIView):
             else:
                 data = json.loads(json_text)
             
+            # Reset sequence to prevent ID conflicts
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT setval(pg_get_serial_sequence('universities_university', 'id'), COALESCE(MAX(id), 1)) FROM universities_university;")
+            
             # Process data and create universities directly
             created_universities = []
             skipped_count = 0
@@ -621,30 +654,32 @@ class UniversityBulkCreate(APIView):
                 data = [data]
             
             for item in data:
-                # Remove id field completely
-                item.pop('id', None)
-                
-                # Skip if university with same name already exists
-                if University.objects.filter(name=item.get('name', '')).exists():
+                # Skip if university with same name AND country already exists
+                name = item.get('name', '')
+                country = item.get('country', '')
+                if University.objects.filter(name=name, country=country).exists():
                     skipped_count += 1
                     continue
                 
-                # Create university directly using ORM
-                university = University.objects.create(
-                    name=item.get('name', ''),
-                    country=item.get('country', ''),
-                    city=item.get('city', ''),
-                    course_offered=item.get('course_offered', ''),
-                    application_fee=item.get('application_fee', '0.00'),
-                    tuition_fee=item.get('tuition_fee', '0.00'),
-                    intakes=item.get('intakes', []),
-                    bachelor_programs=item.get('bachelor_programs', []),
-                    masters_programs=item.get('masters_programs', []),
-                    scholarships=item.get('scholarships', []),
-                    university_link=item.get('university_link', ''),
-                    application_link=item.get('application_link', ''),
-                    description=item.get('description', '')
-                )
+                # Create clean data without any id reference
+                clean_data = {
+                    'name': name,
+                    'country': country,
+                    'city': item.get('city', ''),
+                    'course_offered': item.get('course_offered', ''),
+                    'application_fee': item.get('application_fee', '0.00'),
+                    'tuition_fee': item.get('tuition_fee', '0.00'),
+                    'intakes': item.get('intakes', []),
+                    'bachelor_programs': item.get('bachelor_programs', []),
+                    'masters_programs': item.get('masters_programs', []),
+                    'scholarships': item.get('scholarships', []),
+                    'university_link': item.get('university_link', ''),
+                    'application_link': item.get('application_link', ''),
+                    'description': item.get('description', '')
+                }
+                
+                # Create university directly without serializer to avoid any ID issues
+                university = University.objects.create(**clean_data)
                 created_universities.append(university)
             
             if not created_universities:
@@ -1207,3 +1242,43 @@ def suggest_username(request):
             break
     
     return Response({'suggestions': suggestions[:5]})
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def send_bulk_email(request):
+    data = request.data
+    subject = data.get('subject', '')
+    message = data.get('message', '')
+    user_ids = data.get('user_ids', [])
+    send_to_all = data.get('send_to_all', False)
+    
+    if not subject or not message:
+        return Response({'error': 'Subject and message are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        if send_to_all:
+            users = User.objects.filter(is_active=True)
+        else:
+            users = User.objects.filter(id__in=user_ids, is_active=True)
+        
+        recipient_emails = [user.email for user in users if user.email]
+        
+        if not recipient_emails:
+            return Response({'error': 'No valid email addresses found'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=recipient_emails,
+            fail_silently=False,
+        )
+        
+        return Response({
+            'success': True,
+            'message': f'Email sent to {len(recipient_emails)} users',
+            'recipients_count': len(recipient_emails)
+        })
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

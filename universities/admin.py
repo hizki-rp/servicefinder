@@ -21,36 +21,37 @@ class UniversityJSONImportAdmin(admin.ModelAdmin):
     fields = ('json_data',)
 
     def save_model(self, request, obj, form, change):
-        # We save the import object itself to have a history.
-        super().save_model(request, obj, form, change)
-
         json_data_str = form.cleaned_data.get('json_data')
         if not json_data_str:
             self.message_user(request, "JSON data field cannot be empty.", level=messages.WARNING)
             return
 
+        # Process universities first, then save the import object
+        created_count = 0
+        skipped_count = 0
+        error_occurred = False
+        
         try:
             data = json.loads(json_data_str)
             
-            with transaction.atomic():
-                # Process data and create universities directly
-                created_count = 0
-                skipped_count = 0
-                
-                if not isinstance(data, list):
-                    data = [data]
-                
-                for item in data:
+            if not isinstance(data, list):
+                data = [data]
+            
+            for item in data:
+                try:
                     # Remove id field completely
                     item.pop('id', None)
                     
-                    # Skip if university with same name already exists
-                    if University.objects.filter(name=item.get('name', '')).exists():
+                    # Skip if university with same name AND country already exists
+                    if University.objects.filter(
+                        name=item.get('name', ''),
+                        country=item.get('country', '')
+                    ).exists():
                         skipped_count += 1
                         continue
                     
                     # Create university directly using ORM
-                    University.objects.create(
+                    university = University.objects.create(
                         name=item.get('name', ''),
                         country=item.get('country', ''),
                         city=item.get('city', ''),
@@ -66,13 +67,24 @@ class UniversityJSONImportAdmin(admin.ModelAdmin):
                         description=item.get('description', '')
                     )
                     created_count += 1
+                except Exception as item_error:
+                    print(f"Error creating university {item.get('name', 'Unknown')}: {item_error}")
+                    error_occurred = True
+                    continue
+            
+            # Only save the import object after universities are created
+            super().save_model(request, obj, form, change)
             
             if created_count > 0:
                 self.message_user(request, f"Successfully imported {created_count} university/universities. {skipped_count} skipped (already exist).", level=messages.SUCCESS)
+            elif error_occurred:
+                self.message_user(request, f"Import completed with errors. {skipped_count} universities already existed.", level=messages.WARNING)
             else:
                 self.message_user(request, f"No new universities created. {skipped_count} already exist.", level=messages.WARNING)
+                
+        except json.JSONDecodeError:
+            self.message_user(request, "Invalid JSON format.", level=messages.ERROR)
         except Exception as e:
-            # This will catch JSONDecodeError, serializer validation errors, etc.
             self.message_user(request, f"An error occurred during import: {e}", level=messages.ERROR)
 
     def has_change_permission(self, request, obj=None):

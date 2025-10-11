@@ -103,6 +103,7 @@ INSTALLED_APPS = [
      'notifications',
      'content_creator',
      'payments',
+     'gamification',
      'django_celery_beat',
      'django_celery_results',
 ]
@@ -243,17 +244,18 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 #NOTIFICATION AND ASYNC TASKS SETTINGS
 
-# Email Configuration (for development, prints to console)
+# Email Configuration
+# For testing: use console backend (emails print to console)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# In production, you would use a real SMTP service like SendGrid or Mailgun
+# For production: use Gmail SMTP (uncomment when ready)
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.sendgrid.net'
+# EMAIL_HOST = 'smtp.gmail.com'
 # EMAIL_PORT = 587
 # EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = 'apikey' # This is the string 'apikey' for SendGrid
-# EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY')
-# DEFAULT_FROM_EMAIL = 'noreply@addistemari.com'
+# EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'addistemari.m@gmail.com')
+# EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = 'addistemari.m@gmail.com'
 
 
 # Celery Configuration
