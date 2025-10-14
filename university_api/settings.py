@@ -104,6 +104,7 @@ INSTALLED_APPS = [
      'content_creator',
      'payments',
      'gamification',
+     'emails',
      'django_celery_beat',
      'django_celery_results',
 ]
@@ -245,17 +246,16 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 #NOTIFICATION AND ASYNC TASKS SETTINGS
 
 # Email Configuration
-# For testing: use console backend (emails print to console)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
-# For production: use Gmail SMTP (uncomment when ready)
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'addistemari.m@gmail.com')
-# EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+# Use Gmail SMTP for both development and production
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'addistemari.m@gmail.com'
+EMAIL_HOST_PASSWORD = 'nmfs wzua fryu mtks'
 DEFAULT_FROM_EMAIL = 'addistemari.m@gmail.com'
+EMAIL_USE_SSL = False
+EMAIL_TIMEOUT = 30
 
 
 # Celery Configuration

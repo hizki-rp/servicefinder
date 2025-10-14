@@ -120,6 +120,13 @@ class UniversitySerializer(serializers.ModelSerializer):
         model = University
         fields = '__all__'
         extra_kwargs = {'id': {'read_only': True}}
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Temporarily exclude image_url if it doesn't exist in the database
+        if 'image_url' in data:
+            data.pop('image_url', None)
+        return data
 
 class DashboardUniversitySerializer(serializers.ModelSerializer):
     class Meta:

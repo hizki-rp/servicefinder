@@ -127,10 +127,20 @@ class ScholarshipResultAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 class UniversityDataAdmin(admin.ModelAdmin):
-    list_display = ('name', 'country', 'program_count', 'scholarship_count')
+    list_display = ('name', 'country', 'program_count', 'scholarship_count', 'has_image')
     list_filter = ('country',)
-    readonly_fields = ('formatted_programs', 'formatted_scholarships_detail')
-    fields = ('name', 'country', 'formatted_scholarships_detail', 'formatted_programs')
+    readonly_fields = ('formatted_programs', 'formatted_scholarships_detail', 'image_preview')
+    fields = ('name', 'country', 'image_url', 'image_preview', 'formatted_scholarships_detail', 'formatted_programs')
+    
+    def has_image(self, obj):
+        return "Yes" if obj.image_url else "No"
+    has_image.short_description = "Has Image"
+    
+    def image_preview(self, obj):
+        if obj.image_url:
+            return format_html('<img src="{}" style="max-width: 200px; max-height: 150px; object-fit: cover; border-radius: 8px;" />', obj.image_url)
+        return "No image"
+    image_preview.short_description = "Image Preview"
     
     def program_count(self, obj):
         return f"{len(obj.bachelor_programs)} bachelor, {len(obj.masters_programs)} masters"
