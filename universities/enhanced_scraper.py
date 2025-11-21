@@ -4,14 +4,10 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from datetime import datetime
-<<<<<<< HEAD
 try:
     import extruct
 except (ImportError, AttributeError, Exception):
     extruct = None
-=======
-import extruct
->>>>>>> 58c1f1955b0432229c400193ea1a78add71e9fe6
 from price_parser import Price
 import pycountry
 import tldextract
@@ -120,12 +116,9 @@ class EnhancedUniversityScraper:
         html = str(soup)
         structured_data = {}
         
-<<<<<<< HEAD
         if extruct is None:
             return structured_data
         
-=======
->>>>>>> 58c1f1955b0432229c400193ea1a78add71e9fe6
         try:
             data = extruct.extract(html, base_url=base_url, syntaxes=['json-ld', 'microdata'])
             
