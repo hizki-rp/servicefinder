@@ -38,6 +38,7 @@ api_urlpatterns = [
     path('payments/', include('payments.urls')),
     path('gamification/', include('gamification.urls')),
     path('emails/', include('emails.urls')),
+    path('', include('essays.urls')),
     path('', include(router.urls)), # for contacts app
 ]
 

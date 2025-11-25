@@ -105,6 +105,7 @@ INSTALLED_APPS = [
      'payments',
      'gamification',
      'emails',
+     'essays',
      'django_celery_beat',
      'django_celery_results',
 ]
