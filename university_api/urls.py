@@ -18,11 +18,29 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include, re_path
+from django.http import JsonResponse
 from universities.views import PaymentWebhookView
 
 from rest_framework.routers import DefaultRouter
 from contacts.views import ContactViewSet
 from universities import views as university_views
+
+def api_root(request):
+    """Simple API root view that returns available endpoints"""
+    return JsonResponse({
+        'message': 'Addis Temari API',
+        'version': '1.0',
+        'endpoints': {
+            'authentication': {
+                'token': '/api/token/',
+                'register': '/api/register/',
+            },
+            'dashboard': '/api/dashboard/',
+            'universities': '/api/universities/',
+            'profile': '/api/profile/',
+            'notifications': '/api/notifications/',
+        }
+    })
 
 router = DefaultRouter()
 # Register the UserViewSet from the universities app. This provides the /api/users/ endpoint.
@@ -31,6 +49,7 @@ router.register(r'contacts', ContactViewSet, basename='contact')
 
 # Group all API endpoints under a single prefix for clarity and better organization.
 api_urlpatterns = [
+    path('', api_root, name='api-root'),  # API root endpoint
     path('', include('universities.urls')),
     path('', include('profiles.urls')),
     path('', include('notifications.urls')),
@@ -39,6 +58,7 @@ api_urlpatterns = [
     path('gamification/', include('gamification.urls')),
     path('emails/', include('emails.urls')),
     path('', include('essays.urls')),
+    path('', include('required_documents.urls')),  # Document upload endpoints
     path('', include(router.urls)), # for contacts app
 ]
 

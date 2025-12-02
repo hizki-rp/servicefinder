@@ -87,6 +87,16 @@ class EssayUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Essay
         fields = ['id', 'title', 'description', 'content', 'createdAt', 'updatedAt', 'user']
+        read_only_fields = ['createdAt', 'updatedAt']
+    
+    def update(self, instance, validated_data):
+        """Override update to ensure content is properly saved"""
+        # Update all fields including content
+        instance.title = validated_data.get('title', instance.title)
+        instance.description = validated_data.get('description', instance.description)
+        instance.content = validated_data.get('content', instance.content)
+        instance.save()
+        return instance
     
     def get_user(self, obj):
         """Return user information"""

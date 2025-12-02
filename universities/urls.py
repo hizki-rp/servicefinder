@@ -40,4 +40,9 @@ urlpatterns = [
     
     # Bulk Email
     path('send-bulk-email/', views.send_bulk_email, name='send-bulk-email'),
+    
+    # Password Reset
+    path('password-reset/request/', views.request_password_reset, name='password-reset-request'),
+    path('password-reset/verify/', views.verify_password_reset_code, name='password-reset-verify'),
+    path('password-reset/reset/', views.reset_password, name='password-reset'),
 ]

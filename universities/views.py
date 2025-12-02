@@ -12,6 +12,9 @@ from rest_framework.views import APIView
 from django.utils import timezone
 from datetime import timedelta
 import os
+import random
+import string
+from django.core.cache import cache
 import uuid
 import requests
 import json
@@ -213,6 +216,15 @@ class DashboardView(APIView):
     def get(self, request):
         # get_or_create ensures a dashboard exists if the signal failed for some reason
         dashboard, created = UserDashboard.objects.get_or_create(user=request.user)
+        
+        # Validate and update subscription status if end_date is in the past
+        if dashboard.subscription_status == 'active' and dashboard.subscription_end_date:
+            today = timezone.now().date()
+            if dashboard.subscription_end_date < today:
+                # Subscription has expired, update status
+                dashboard.subscription_status = 'expired'
+                dashboard.save(update_fields=['subscription_status'])
+        
         serializer = UserDashboardSerializer(dashboard)
         return Response(serializer.data)
 
@@ -310,6 +322,37 @@ class UniversityList(generics.ListAPIView):
                 )
             else:
                 queryset = queryset.filter(country__icontains=country_query)
+        
+        # Custom filter for course/program - search in course_offered, bachelor_programs, and masters_programs
+        course_query = self.request.query_params.get('course_offered__icontains')
+        if course_query:
+            from django.db import connection
+            
+            # Search in course_offered field
+            course_filter = Q(course_offered__icontains=course_query)
+            
+            # Also search in JSON fields (bachelor_programs and masters_programs)
+            if connection.vendor == 'postgresql':
+                # PostgreSQL: Use raw SQL to cast JSON to text and search
+                # This searches within the JSON array structure
+                queryset = queryset.extra(
+                    where=[
+                        "course_offered ILIKE %s OR "
+                        "bachelor_programs::text ILIKE %s OR "
+                        "masters_programs::text ILIKE %s"
+                    ],
+                    params=[f'%{course_query}%', f'%{course_query}%', f'%{course_query}%']
+                )
+            else:
+                # For other databases, try direct JSON search or text search
+                try:
+                    # Try searching JSON fields directly (works for some databases)
+                    course_filter |= Q(bachelor_programs__icontains=course_query)
+                    course_filter |= Q(masters_programs__icontains=course_query)
+                    queryset = queryset.filter(course_filter)
+                except Exception:
+                    # Fallback: search only in course_offered if JSON search fails
+                    queryset = queryset.filter(course_offered__icontains=course_query)
         
         # Custom filter for intakes JSONField with seasonal mapping
         intake_query = self.request.query_params.get('intake')
@@ -612,8 +655,36 @@ class AdminStatsView(APIView):
 
         # University and Subscription stats
         total_universities = University.objects.count()
-        active_subscriptions = UserDashboard.objects.filter(subscription_status='active').count()
-        expired_subscriptions = UserDashboard.objects.filter(subscription_status='expired').count()
+        
+        # Get current date for accurate subscription calculations
+        today = timezone.now().date()
+        
+        # Active subscriptions: status is 'active' AND end_date is in the future (or null)
+        active_subscriptions = UserDashboard.objects.filter(
+            subscription_status='active',
+        ).filter(
+            Q(subscription_end_date__gte=today) | Q(subscription_end_date__isnull=True)
+        ).count()
+        
+        # Expired subscriptions: status is 'expired' OR (status is 'active' but end_date is in the past)
+        expired_subscriptions = UserDashboard.objects.filter(
+            Q(subscription_status='expired') | 
+            Q(subscription_status='active', subscription_end_date__lt=today)
+        ).count()
+        
+        # Extended subscriptions: users with active subscriptions that have an end_date in the future
+        # This represents users whose subscriptions have been extended beyond today
+        extended_subscriptions = UserDashboard.objects.filter(
+            subscription_status='active',
+            subscription_end_date__gt=today
+        ).count()
+        
+        # Users with paid subscriptions (have at least one successful payment)
+        try:
+            from payments.models import Payment
+            paid_users_count = Payment.objects.filter(status='success').values('user').distinct().count()
+        except ImportError:
+            paid_users_count = 0
 
         stats = {
             'total_users': total_users,
@@ -623,6 +694,8 @@ class AdminStatsView(APIView):
             'total_universities': total_universities,
             'active_subscriptions': active_subscriptions,
             'expired_subscriptions': expired_subscriptions,
+            'extended_subscriptions': extended_subscriptions,
+            'paid_users': paid_users_count,
         }
         return Response(stats)
 
@@ -1257,12 +1330,27 @@ def send_bulk_email(request):
     message = data.get('message', '')
     user_ids = data.get('user_ids', [])
     send_to_all = data.get('send_to_all', False)
+    send_to_paid_users = data.get('send_to_paid_users', False)
+    send_to_extended_subscriptions = data.get('send_to_extended_subscriptions', False)
     
     if not subject or not message:
         return Response({'error': 'Subject and message are required'}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        if send_to_all:
+        if send_to_extended_subscriptions:
+            # Get users with extended subscriptions (active status and end_date in the future)
+            today = timezone.now().date()
+            extended_user_ids = UserDashboard.objects.filter(
+                subscription_status='active',
+                subscription_end_date__gt=today
+            ).values_list('user', flat=True)
+            users = User.objects.filter(id__in=extended_user_ids, is_active=True)
+        elif send_to_paid_users:
+            # Get users with successful payments
+            from payments.models import Payment
+            paid_user_ids = Payment.objects.filter(status='success').values_list('user', flat=True).distinct()
+            users = User.objects.filter(id__in=paid_user_ids, is_active=True)
+        elif send_to_all:
             users = User.objects.filter(is_active=True)
         else:
             users = User.objects.filter(id__in=user_ids, is_active=True)
@@ -1280,6 +1368,188 @@ def send_bulk_email(request):
             fail_silently=False,
         )
         
+        return Response({
+            'success': True,
+            'message': f'Email sent successfully to {len(recipient_emails)} recipient(s)'
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': f'Failed to send email: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Password Reset Views
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def request_password_reset(request):
+    """
+    Request a password reset code to be sent to the user's email.
+    """
+    email = request.data.get('email', '').strip().lower()
+    
+    if not email:
+        return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(email__iexact=email)
+    except User.DoesNotExist:
+        # Don't reveal if email exists for security
+        return Response({
+            'message': 'If an account exists with this email, a reset code has been sent.'
+        }, status=status.HTTP_200_OK)
+    
+    # Generate a 6-digit code
+    reset_code = ''.join(random.choices(string.digits, k=6))
+    
+    # Store code in cache with email as key (expires in 15 minutes)
+    cache_key = f'password_reset_{email}'
+    cache.set(cache_key, {
+        'code': reset_code,
+        'user_id': user.id,
+        'created_at': timezone.now().isoformat()
+    }, timeout=900)  # 15 minutes
+    
+    # Send email with reset code
+    try:
+        email_subject = 'Password Reset Code'
+        email_message = f"""
+Hello {user.get_full_name() or user.username},
+
+You requested to reset your password. Use the following code to verify your identity:
+
+Reset Code: {reset_code}
+
+This code will expire in 15 minutes.
+
+If you didn't request this, please ignore this email.
+
+Best regards,
+The Team
+"""
+        # Send email with SSL context handling for certificate issues
+        try:
+            send_mail(
+                subject=email_subject,
+                message=email_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception as email_error:
+            # If SSL certificate error, use unverified context (development only)
+            error_str = str(email_error).lower()
+            if 'ssl' in error_str or 'certificate' in error_str or 'cert' in error_str:
+                import ssl
+                import smtplib
+                from django.core.mail import EmailMessage
+                
+                # Create SSL context without verification (for development)
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                
+                # Create SMTP connection manually with unverified SSL
+                try:
+                    server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT)
+                    server.starttls(context=ssl_context)
+                    server.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
+                    
+                    # Send email manually
+                    from email.mime.text import MIMEText
+                    from email.mime.multipart import MIMEMultipart
+                    
+                    msg = MIMEMultipart()
+                    msg['From'] = settings.DEFAULT_FROM_EMAIL
+                    msg['To'] = user.email
+                    msg['Subject'] = email_subject
+                    msg.attach(MIMEText(email_message, 'plain'))
+                    
+                    server.send_message(msg)
+                    server.quit()
+                except Exception as smtp_error:
+                    # If manual SMTP also fails, raise original error
+                    raise email_error
+            else:
+                raise email_error
+        
+        return Response({
+            'message': 'If an account exists with this email, a reset code has been sent.'
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            'error': f'Failed to send email: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_password_reset_code(request):
+    """
+    Verify the password reset code.
+    """
+    email = request.data.get('email', '').strip().lower()
+    code = request.data.get('code', '').strip()
+    
+    if not email or not code:
+        return Response({'error': 'Email and code are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    cache_key = f'password_reset_{email}'
+    reset_data = cache.get(cache_key)
+    
+    if not reset_data:
+        return Response({'error': 'Invalid or expired code. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if reset_data['code'] != code:
+        return Response({'error': 'Invalid code. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Code is valid, return success
+    return Response({
+        'message': 'Code verified successfully',
+        'verified': True
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password(request):
+    """
+    Reset the user's password after code verification.
+    """
+    email = request.data.get('email', '').strip().lower()
+    code = request.data.get('code', '').strip()
+    new_password = request.data.get('new_password', '')
+    
+    if not email or not code or not new_password:
+        return Response({'error': 'Email, code, and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Validate password strength
+    if len(new_password) < 8:
+        return Response({'error': 'Password must be at least 8 characters long'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    cache_key = f'password_reset_{email}'
+    reset_data = cache.get(cache_key)
+    
+    if not reset_data:
+        return Response({'error': 'Invalid or expired code. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if reset_data['code'] != code:
+        return Response({'error': 'Invalid code. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=reset_data['user_id'])
+        user.set_password(new_password)
+        user.save()
+        
+        # Delete the reset code from cache
+        cache.delete(cache_key)
+        
+        return Response({
+            'message': 'Password reset successfully. You can now login with your new password.'
+        }, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Failed to reset password: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
         return Response({
             'success': True,
             'message': f'Email sent to {len(recipient_emails)} users',

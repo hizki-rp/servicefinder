@@ -106,6 +106,7 @@ INSTALLED_APPS = [
      'gamification',
      'emails',
      'essays',
+     'required_documents',
      'django_celery_beat',
      'django_celery_results',
 ]

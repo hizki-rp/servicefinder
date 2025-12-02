@@ -108,8 +108,18 @@ class UserDetailSerializer(serializers.ModelSerializer):
         # Update nested dashboard subscription fields
         if dashboard_data:
             dashboard, _ = UserDashboard.objects.get_or_create(user=instance)
-            dashboard.subscription_status = dashboard_data.get('subscription_status', dashboard.subscription_status)
-            dashboard.subscription_end_date = dashboard_data.get('subscription_end_date', dashboard.subscription_end_date)
+            subscription_status = dashboard_data.get('subscription_status')
+            subscription_end_date = dashboard_data.get('subscription_end_date')
+            
+            # Update subscription status if provided
+            if subscription_status is not None:
+                dashboard.subscription_status = subscription_status
+            
+            # Update subscription end date if provided (can be empty string to clear it)
+            if subscription_end_date is not None:
+                # Convert empty string to None
+                dashboard.subscription_end_date = subscription_end_date if subscription_end_date else None
+            
             dashboard.save()
             instance.refresh_from_db()
 
