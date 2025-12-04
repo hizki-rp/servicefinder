@@ -106,9 +106,19 @@ class CreateUserView(generics.CreateAPIView):
 class UserViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows users to be viewed or edited by an admin.
+    Supports filtering by referred_by query parameter.
     """
-    queryset = User.objects.prefetch_related('groups', 'user_permissions').select_related('dashboard').all().order_by('-date_joined')
     permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        queryset = User.objects.prefetch_related('groups', 'user_permissions').select_related('dashboard', 'profile').all().order_by('-date_joined')
+        
+        # Filter by referred_by code
+        referred_by = self.request.query_params.get('referred_by', '')
+        if referred_by:
+            queryset = queryset.filter(profile__referred_by__iexact=referred_by)
+        
+        return queryset
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -647,8 +657,21 @@ class AdminStatsView(APIView):
         applied_users = User.objects.annotate(applied_count=Count('dashboard__applied')).filter(applied_count__gt=0).count()
         
         # Users logged in within the last 30 days
-        thirty_days_ago = timezone.now() - timedelta(days=30)
+        now = timezone.now()
+        thirty_days_ago = now - timedelta(days=30)
         active_logins = User.objects.filter(last_login__isnull=False, last_login__gte=thirty_days_ago).count()
+        
+        # Users logged in this week (last 7 days)
+        seven_days_ago = now - timedelta(days=7)
+        logins_this_week = User.objects.filter(last_login__isnull=False, last_login__gte=seven_days_ago).count()
+        
+        # Users logged in last week (between 14 and 7 days ago)
+        fourteen_days_ago = now - timedelta(days=14)
+        logins_last_week = User.objects.filter(
+            last_login__isnull=False, 
+            last_login__gte=fourteen_days_ago,
+            last_login__lt=seven_days_ago
+        ).count()
         
         # Users marked as inactive
         inactive_accounts = User.objects.filter(is_active=False).count()
@@ -689,7 +712,9 @@ class AdminStatsView(APIView):
         stats = {
             'total_users': total_users,
             'applied_users': applied_users,
-            'recent_logins': active_logins,
+            'recent_logins': active_logins,  # Last 30 days
+            'logins_this_week': logins_this_week,  # Last 7 days
+            'logins_last_week': logins_last_week,  # 14-7 days ago
             'inactive_accounts': inactive_accounts,
             'total_universities': total_universities,
             'active_subscriptions': active_subscriptions,

@@ -15,11 +15,12 @@ class UserSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=True, max_length=150)
     last_name = serializers.CharField(required=True, max_length=150)
     phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20, write_only=True)
+    referred_by = serializers.CharField(required=False, allow_blank=True, max_length=10, write_only=True)
 
     class Meta:
         model = User
         # Add 'email' to the list of fields
-        fields = ["id", "username", "email", "password", "first_name", "last_name", "phone_number"]
+        fields = ["id", "username", "email", "password", "first_name", "last_name", "phone_number", "referred_by"]
         extra_kwargs = {"password": {"write_only": True}}
 
     def validate_username(self, value):
@@ -30,6 +31,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         phone_number = validated_data.pop('phone_number', None)
+        referred_by = validated_data.pop('referred_by', None)
         # Use create_user to properly hash the password
         user = User.objects.create_user(
             username=validated_data['username'],
@@ -52,6 +54,9 @@ class UserSerializer(serializers.ModelSerializer):
         profile, created = Profile.objects.get_or_create(user=user)
         if phone_number:
             profile.phone_number = phone_number
+        if referred_by:
+            profile.referred_by = referred_by
+        if phone_number or referred_by:
             profile.save()
 
         return user
@@ -91,11 +96,20 @@ class UserDetailSerializer(serializers.ModelSerializer):
         many=True,
         queryset=Group.objects.all()
      )
+    referred_by = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name", "groups", "is_staff", "is_active", "date_joined", "dashboard"]
+        fields = ["id", "username", "email", "first_name", "last_name", "groups", "is_staff", "is_active", "date_joined", "dashboard", "referred_by"]
         read_only_fields = ["id", "username", "email", "date_joined", "is_staff"]
+    
+    def get_referred_by(self, obj):
+        try:
+            if hasattr(obj, 'profile') and obj.profile:
+                return obj.profile.referred_by or ''
+        except Exception:
+            pass
+        return ''
     
     def update(self, instance, validated_data):
         dashboard_data = validated_data.pop('dashboard', None)

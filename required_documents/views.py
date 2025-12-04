@@ -364,6 +364,13 @@ class DocumentUploadView(APIView):
         category_key = serializer.validated_data['category_key']
         file = serializer.validated_data['file']
         
+        # Validate file size - max 1MB
+        if file.size > 1 * 1024 * 1024:
+            return Response(
+                {'error': 'File size cannot exceed 1MB. Please compress your file and try again.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         category = DocumentCategory.objects.filter(api_key=category_key).first()
         
         try:
@@ -457,10 +464,11 @@ class BulkDocumentUploadView(APIView):
         
         for category_key, file in uploaded_files.items():
             try:
-                if file.size > 10 * 1024 * 1024:
+                # Validate file size - max 1MB per file
+                if file.size > 1 * 1024 * 1024:
                     results['errors'].append({
                         'category_key': category_key,
-                        'error': 'File size cannot exceed 10MB.'
+                        'error': 'File size cannot exceed 1MB. Please compress your file and try again.'
                     })
                     continue
                 
@@ -654,6 +662,7 @@ class AdminUserDocumentListView(APIView):
     - document_complete: Filter by document completion status (true/false)
     - min_documents: Minimum number of uploaded documents
     - max_documents: Maximum number of uploaded documents
+    - referred_by: Filter by referral code (4-digit code)
     """
     permission_classes = [IsAdminUser]
 
@@ -665,6 +674,7 @@ class AdminUserDocumentListView(APIView):
         document_complete = request.query_params.get('document_complete', '')
         min_documents = request.query_params.get('min_documents', '')
         max_documents = request.query_params.get('max_documents', '')
+        referred_by = request.query_params.get('referred_by', '')
         
         # Get users who have document profiles or document submissions
         users = User.objects.filter(
@@ -688,6 +698,8 @@ class AdminUserDocumentListView(APIView):
             users = users.filter(document_profile__highest_education=highest_education)
         if applying_to:
             users = users.filter(document_profile__applying_to=applying_to)
+        if referred_by:
+            users = users.filter(profile__referred_by__iexact=referred_by)
         
         # Annotate with document stats
         users = users.annotate(
@@ -713,6 +725,14 @@ class AdminUserDocumentListView(APIView):
         # Build response with completion percentage calculation
         results = []
         for user in users:
+            # Get referred_by from user's profile (not document_profile)
+            referred_by_code = ''
+            try:
+                if hasattr(user, 'profile') and user.profile:
+                    referred_by_code = user.profile.referred_by or ''
+            except Exception:
+                pass
+            
             try:
                 profile = user.document_profile
                 profile_data = {
@@ -723,6 +743,7 @@ class AdminUserDocumentListView(APIView):
                     'applying_to': profile.get_applying_to_display(),
                     'applying_to_key': profile.applying_to,
                     'phone_number': profile.phone_number,
+                    'referred_by': referred_by_code,
                 }
                 user_applying_to = profile.applying_to
             except UserDocumentProfile.DoesNotExist:
@@ -734,6 +755,7 @@ class AdminUserDocumentListView(APIView):
                     'applying_to': '',
                     'applying_to_key': '',
                     'phone_number': '',
+                    'referred_by': referred_by_code,
                 }
                 user_applying_to = None
             

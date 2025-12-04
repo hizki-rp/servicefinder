@@ -15,6 +15,9 @@ class Profile(models.Model):
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profile_pics/', null=True, blank=True)
     preferred_intakes = models.JSONField(default=list, blank=True)
+    # Referral code - 4 digit code entered by user during registration (e.g. "1234")
+    referred_by = models.CharField(max_length=10, blank=True, null=True, 
+                                   help_text="Referral code used during registration")
 
     def __str__(self):
         return f'{self.user.username} Profile'
