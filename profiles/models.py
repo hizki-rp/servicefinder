@@ -1,11 +1,13 @@
 # h:\Django2\UNI-FINDER-GIT\backend\profiles\models.py
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.mail import send_mail
 from django.conf import settings
 import logging
+import random
+import string
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,57 @@ class Profile(models.Model):
 
     def __str__(self):
         return f'{self.user.username} Profile'
+
+
+class Agent(models.Model):
+    """
+    Agent model for users who can refer other users to the platform.
+    Agents have their own registration, dashboard, and referral tracking.
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_profile')
+    phone_number = models.CharField(max_length=20)
+    referral_code = models.CharField(max_length=10, unique=True, blank=True,
+                                     help_text="Unique referral code generated from initials + random digits")
+    referrals_count = models.PositiveIntegerField(default=0, 
+                                                   help_text="Number of users who registered using this agent's referral code")
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f'Agent: {self.user.username} ({self.referral_code})'
+
+    def generate_referral_code(self):
+        """
+        Generate a unique referral code using agent's name initials + 4 random digits.
+        Example: AB1234
+        """
+        first_initial = self.user.first_name[0].upper() if self.user.first_name else 'X'
+        last_initial = self.user.last_name[0].upper() if self.user.last_name else 'X'
+        
+        # Generate unique code
+        while True:
+            random_digits = ''.join(random.choices(string.digits, k=4))
+            code = f"{first_initial}{last_initial}{random_digits}"
+            if not Agent.objects.filter(referral_code=code).exists():
+                return code
+
+    def save(self, *args, **kwargs):
+        # Generate referral code if not set
+        if not self.referral_code:
+            self.referral_code = self.generate_referral_code()
+        super().save(*args, **kwargs)
+
+    def get_referral_link(self):
+        """
+        Returns the full referral link for this agent.
+        Example: https://addistemari.com/register?ref=AB1234
+        """
+        return f"https://addistemari.com/register?ref={self.referral_code}"
+
+    def increment_referral_count(self):
+        """Increment the referral count when a user registers with this agent's code."""
+        self.referrals_count += 1
+        self.save(update_fields=['referrals_count'])
 
 # These signals automatically create a Profile when a new User is created.
 @receiver(post_save, sender=User)
