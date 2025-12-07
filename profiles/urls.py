@@ -1,7 +1,20 @@
 # h:\Django2\UNI-FINDER-GIT\backend\profiles\urls.py
 from django.urls import path
-from .views import ProfileView
+from .views import (
+    ProfileView, 
+    AgentRegisterView, 
+    AgentDashboardView, 
+    AgentLoginView,
+    validate_referral_code
+)
 
 urlpatterns = [
+    # User Profile
     path('profile/', ProfileView.as_view(), name='user-profile'),
+    
+    # Agent Endpoints
+    path('agent/register/', AgentRegisterView.as_view(), name='agent-register'),
+    path('agent/login/', AgentLoginView.as_view(), name='agent-login'),
+    path('agent/dashboard/', AgentDashboardView.as_view(), name='agent-dashboard'),
+    path('agent/validate-referral/', validate_referral_code, name='validate-referral-code'),
 ]
