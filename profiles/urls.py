@@ -5,7 +5,9 @@ from .views import (
     AgentRegisterView, 
     AgentDashboardView, 
     AgentLoginView,
-    validate_referral_code
+    validate_referral_code,
+    AdminAgentListView,
+    AdminAgentDetailView,
 )
 
 urlpatterns = [
@@ -17,4 +19,8 @@ urlpatterns = [
     path('agent/login/', AgentLoginView.as_view(), name='agent-login'),
     path('agent/dashboard/', AgentDashboardView.as_view(), name='agent-dashboard'),
     path('agent/validate-referral/', validate_referral_code, name='validate-referral-code'),
+    
+    # Admin Agent Management
+    path('admin/agents/', AdminAgentListView.as_view(), name='admin-agent-list'),
+    path('admin/agents/<int:pk>/', AdminAgentDetailView.as_view(), name='admin-agent-detail'),
 ]

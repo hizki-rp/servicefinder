@@ -32,6 +32,8 @@ class Agent(models.Model):
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_profile')
     phone_number = models.CharField(max_length=20)
+    cbe_account_number = models.CharField(max_length=20, blank=True, null=True,
+                                          help_text="CBE bank account number for receiving referral payments")
     referral_code = models.CharField(max_length=10, unique=True, blank=True,
                                      help_text="Unique referral code generated from initials + random digits")
     referrals_count = models.PositiveIntegerField(default=0, 
@@ -73,6 +75,109 @@ class Agent(models.Model):
     def increment_referral_count(self):
         """Increment the referral count when a user registers with this agent's code."""
         self.referrals_count += 1
+        self.save(update_fields=['referrals_count'])
+
+    def get_paid_referrals_count(self):
+        """
+        Get the count of successful referrals - users who have made a successful payment
+        OR have an active subscription status.
+        """
+        from payments.models import Payment
+        from universities.models import UserDashboard
+        from django.db.models import Q
+        from django.utils import timezone
+        
+        # Get profiles that used this agent's referral code
+        referred_profiles = Profile.objects.filter(referred_by__iexact=self.referral_code)
+        
+        paid_count = 0
+        for profile in referred_profiles:
+            # Check if user has a successful payment
+            has_successful_payment = Payment.objects.filter(
+                user=profile.user, 
+                status='success'
+            ).exists()
+            
+            # Check if user has active subscription status
+            has_active_subscription = False
+            try:
+                dashboard = profile.user.dashboard
+                has_active_subscription = dashboard.subscription_status == 'active'
+            except UserDashboard.DoesNotExist:
+                pass
+            
+            # Count as successful if user paid OR has active subscription
+            if has_successful_payment or has_active_subscription:
+                paid_count += 1
+        
+        return paid_count
+
+    def get_paid_referred_users(self):
+        """
+        Get list of referred users with their payment and subscription status.
+        Returns list of user data dictionaries.
+        A referral is successful if user has paid OR has active subscription.
+        """
+        from payments.models import Payment
+        from universities.models import UserDashboard
+        from django.utils import timezone
+        
+        referred_profiles = Profile.objects.filter(referred_by__iexact=self.referral_code)
+        users = []
+        
+        for profile in referred_profiles:
+            # Check payment status
+            successful_payments = Payment.objects.filter(
+                user=profile.user, 
+                status='success'
+            )
+            has_paid = successful_payments.exists()
+            total_paid = successful_payments.aggregate(
+                total=models.Sum('amount')
+            )['total'] or 0
+            
+            # Check subscription status
+            try:
+                dashboard = profile.user.dashboard
+                subscription_status = dashboard.subscription_status
+                subscription_end_date = dashboard.subscription_end_date
+                is_subscription_active = subscription_status == 'active'
+                # Also check if subscription hasn't expired
+                is_subscription_valid = (
+                    is_subscription_active and 
+                    subscription_end_date and 
+                    subscription_end_date >= timezone.now().date()
+                )
+            except UserDashboard.DoesNotExist:
+                subscription_status = 'none'
+                subscription_end_date = None
+                is_subscription_active = False
+                is_subscription_valid = False
+            
+            # A referral is successful if user paid OR has active subscription
+            is_successful = has_paid or is_subscription_active
+            
+            users.append({
+                'id': profile.user.id,
+                'username': profile.user.username,
+                'first_name': profile.user.first_name,
+                'last_name': profile.user.last_name,
+                'email': profile.user.email,
+                'date_joined': profile.user.date_joined.isoformat(),
+                'has_paid': has_paid,
+                'total_paid': float(total_paid),
+                'subscription_status': subscription_status,
+                'subscription_end_date': subscription_end_date.isoformat() if subscription_end_date else None,
+                'is_subscription_active': is_subscription_active,
+                'is_subscription_valid': is_subscription_valid,
+                'is_successful_referral': is_successful
+            })
+        
+        return users
+
+    def update_paid_referrals_count(self):
+        """Update the referrals_count to reflect only paid referrals."""
+        self.referrals_count = self.get_paid_referrals_count()
         self.save(update_fields=['referrals_count'])
 
 # These signals automatically create a Profile when a new User is created.

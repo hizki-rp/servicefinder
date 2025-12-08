@@ -1,13 +1,14 @@
 # h:\Django2\UNI-FINDER-GIT\backend\profiles\views.py
 from rest_framework import generics, status
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.db.models import Q
 from .models import Profile, Agent
-from .serializers import ProfileSerializer, AgentRegistrationSerializer, AgentDashboardSerializer
+from .serializers import ProfileSerializer, AgentRegistrationSerializer, AgentDashboardSerializer, AdminAgentSerializer
 
 class ProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
@@ -79,10 +80,11 @@ class AgentDashboardView(APIView):
                 'error': 'You are not registered as an agent.'
             }, status=status.HTTP_403_FORBIDDEN)
 
-        # Update referral count based on actual referrals
-        actual_count = Profile.objects.filter(referred_by__iexact=agent.referral_code).count()
-        if agent.referrals_count != actual_count:
-            agent.referrals_count = actual_count
+        # Update referral count based on PAID referrals only
+        # Only users who made successful payments count as real referrals
+        paid_count = agent.get_paid_referrals_count()
+        if agent.referrals_count != paid_count:
+            agent.referrals_count = paid_count
             agent.save(update_fields=['referrals_count'])
 
         serializer = AgentDashboardSerializer(agent)
@@ -185,3 +187,182 @@ def validate_referral_code(request):
             'valid': False,
             'message': 'Invalid referral code.'
         })
+
+
+# ==================== ADMIN AGENT MANAGEMENT VIEWS ====================
+
+class AdminAgentListView(APIView):
+    """
+    Admin endpoint to list all agents with their referral stats.
+    GET /api/admin/agents/
+    Supports filtering by:
+    - search: Search by name, username, referral code
+    - is_active: Filter by active status
+    - sort_by: Sort by referrals_count, created_at, etc.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        try:
+            # Get query parameters
+            search = request.query_params.get('search', '').strip()
+            is_active = request.query_params.get('is_active', '')
+            sort_by = request.query_params.get('sort_by', '-referrals_count')
+            
+            # Base queryset
+            agents_qs = Agent.objects.select_related('user').all()
+            
+            # Apply search filter
+            if search:
+                agents_qs = agents_qs.filter(
+                    Q(user__username__icontains=search) |
+                    Q(user__first_name__icontains=search) |
+                    Q(user__last_name__icontains=search) |
+                    Q(referral_code__icontains=search) |
+                    Q(phone_number__icontains=search)
+                )
+            
+            # Apply active status filter
+            if is_active.lower() == 'true':
+                agents_qs = agents_qs.filter(is_active=True)
+            elif is_active.lower() == 'false':
+                agents_qs = agents_qs.filter(is_active=False)
+            
+            # Apply sorting
+            valid_sort_fields = ['referrals_count', '-referrals_count', 'created_at', '-created_at', 
+                               'user__username', '-user__username']
+            if sort_by in valid_sort_fields:
+                agents_qs = agents_qs.order_by(sort_by)
+            else:
+                agents_qs = agents_qs.order_by('-referrals_count')
+            
+            # Convert to list
+            agents_list = list(agents_qs)
+            
+            # Build response data manually to avoid serializer issues
+            agents_data = []
+            total_successful = 0
+            
+            for agent in agents_list:
+                try:
+                    # Get referral counts
+                    total_regs = Profile.objects.filter(referred_by__iexact=agent.referral_code).count()
+                    successful_count = 0
+                    referred_users_list = []
+                    
+                    try:
+                        successful_count = agent.get_paid_referrals_count()
+                        referred_users_list = agent.get_paid_referred_users()
+                    except Exception as e:
+                        print(f"Error getting referral data for agent {agent.id}: {e}")
+                    
+                    total_successful += successful_count
+                    
+                    # Get CBE account safely
+                    cbe_account = ""
+                    try:
+                        cbe_account = agent.cbe_account_number or ""
+                    except AttributeError:
+                        pass
+                    
+                    agents_data.append({
+                        'id': agent.id,
+                        'username': agent.user.username,
+                        'email': agent.user.email,
+                        'first_name': agent.user.first_name,
+                        'last_name': agent.user.last_name,
+                        'phone_number': agent.phone_number or "",
+                        'cbe_account_number': cbe_account,
+                        'referral_code': agent.referral_code,
+                        'referral_link': f"https://addistemari.com/register?ref={agent.referral_code}",
+                        'referrals_count': agent.referrals_count,
+                        'total_registrations': total_regs,
+                        'successful_referrals_count': successful_count,
+                        'referred_users': referred_users_list,
+                        'created_at': agent.created_at.isoformat() if agent.created_at else None,
+                        'is_active': agent.is_active,
+                        'date_joined': agent.user.date_joined.isoformat() if agent.user.date_joined else None,
+                    })
+                except Exception as e:
+                    print(f"Error processing agent {agent.id}: {e}")
+                    continue
+            
+            # Calculate stats
+            total_agents = Agent.objects.count()
+            active_agents = Agent.objects.filter(is_active=True).count()
+            
+            # Only count registrations that match actual agent referral codes
+            all_agent_codes = list(Agent.objects.values_list('referral_code', flat=True))
+            # Case-insensitive matching
+            total_registrations = 0
+            for code in all_agent_codes:
+                total_registrations += Profile.objects.filter(referred_by__iexact=code).count()
+            
+            return Response({
+                'agents': agents_data,
+                'stats': {
+                    'total_agents': total_agents,
+                    'active_agents': active_agents,
+                    'total_successful_referrals': total_successful,
+                    'total_registrations': total_registrations,
+                }
+            })
+        except Exception as e:
+            import traceback
+            error_msg = str(e)
+            print(f"Error in AdminAgentListView: {error_msg}")
+            print(traceback.format_exc())
+            return Response({
+                'error': error_msg,
+                'detail': traceback.format_exc(),
+                'agents': [],
+                'stats': {
+                    'total_agents': 0,
+                    'active_agents': 0,
+                    'total_successful_referrals': 0,
+                    'total_registrations': 0,
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminAgentDetailView(APIView):
+    """
+    Admin endpoint to view/update a specific agent.
+    GET /api/admin/agents/<id>/
+    PATCH /api/admin/agents/<id>/
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, pk):
+        try:
+            agent = Agent.objects.select_related('user').get(pk=pk)
+        except Agent.DoesNotExist:
+            return Response({'error': 'Agent not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Update referral count
+        paid_count = agent.get_paid_referrals_count()
+        if agent.referrals_count != paid_count:
+            agent.referrals_count = paid_count
+            agent.save(update_fields=['referrals_count'])
+        
+        serializer = AdminAgentSerializer(agent)
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        try:
+            agent = Agent.objects.select_related('user').get(pk=pk)
+        except Agent.DoesNotExist:
+            return Response({'error': 'Agent not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Update allowed fields
+        if 'is_active' in request.data:
+            agent.is_active = request.data['is_active']
+        if 'phone_number' in request.data:
+            agent.phone_number = request.data['phone_number']
+        if 'cbe_account_number' in request.data:
+            agent.cbe_account_number = request.data['cbe_account_number']
+        
+        agent.save()
+        
+        serializer = AdminAgentSerializer(agent)
+        return Response(serializer.data)

@@ -11,8 +11,9 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Agent)
 class AgentAdmin(admin.ModelAdmin):
-    list_display = ('user', 'referral_code', 'phone_number', 'referrals_count', 'is_active', 'created_at')
-    search_fields = ('user__username', 'user__first_name', 'user__last_name', 'referral_code', 'phone_number')
+    list_display = ('user', 'referral_code', 'phone_number', 'cbe_account_number', 'referrals_count', 'is_active', 'created_at')
+    search_fields = ('user__username', 'user__first_name', 'user__last_name', 'referral_code', 'phone_number', 'cbe_account_number')
     list_filter = ('is_active', 'created_at')
     raw_id_fields = ('user',)
     readonly_fields = ('referral_code', 'referrals_count', 'created_at')
+    list_editable = ('cbe_account_number',)

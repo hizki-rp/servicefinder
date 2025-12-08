@@ -53,6 +53,7 @@ class AgentRegistrationSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
     phone_number = serializers.CharField(max_length=20)
+    cbe_account_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
     def validate_username(self, value):
         """Check for case-insensitive username uniqueness"""
@@ -67,6 +68,7 @@ class AgentRegistrationSerializer(serializers.Serializer):
         first_name = validated_data.get('first_name')
         last_name = validated_data.get('last_name')
         phone_number = validated_data.get('phone_number')
+        cbe_account_number = validated_data.get('cbe_account_number', '')
 
         # Create the User
         user = User.objects.create_user(
@@ -88,7 +90,8 @@ class AgentRegistrationSerializer(serializers.Serializer):
         # Create the Agent profile
         agent = Agent.objects.create(
             user=user,
-            phone_number=phone_number
+            phone_number=phone_number,
+            cbe_account_number=cbe_account_number if cbe_account_number else None
         )
 
         return agent
@@ -101,30 +104,91 @@ class AgentDashboardSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(source='user.last_name', read_only=True)
     referral_link = serializers.SerializerMethodField()
     referred_users = serializers.SerializerMethodField()
+    total_registrations = serializers.SerializerMethodField()
+    successful_referrals_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Agent
         fields = [
             'id', 'username', 'first_name', 'last_name', 
-            'phone_number', 'referral_code', 'referral_link',
-            'referrals_count', 'referred_users', 'created_at', 'is_active'
+            'phone_number', 'cbe_account_number', 'referral_code', 'referral_link',
+            'referrals_count', 'total_registrations', 'successful_referrals_count',
+            'referred_users', 'created_at', 'is_active'
         ]
         read_only_fields = ['id', 'referral_code', 'referrals_count', 'created_at']
 
     def get_referral_link(self, obj):
         return obj.get_referral_link()
 
+    def get_total_registrations(self, obj):
+        """Get total number of users who registered with this agent's referral code (paid and unpaid)"""
+        return Profile.objects.filter(referred_by__iexact=obj.referral_code).count()
+
+    def get_successful_referrals_count(self, obj):
+        """Get count of successful referrals (users who paid)"""
+        return obj.get_paid_referrals_count()
+
     def get_referred_users(self, obj):
-        """Get list of users who registered using this agent's referral code"""
-        from django.contrib.auth.models import User
-        referred_profiles = Profile.objects.filter(referred_by__iexact=obj.referral_code)
-        users = []
-        for profile in referred_profiles:
-            users.append({
-                'id': profile.user.id,
-                'username': profile.user.username,
-                'first_name': profile.user.first_name,
-                'last_name': profile.user.last_name,
-                'date_joined': profile.user.date_joined.isoformat()
-            })
-        return users
+        """
+        Get list of users who registered using this agent's referral code
+        with detailed payment and subscription status.
+        """
+        return obj.get_paid_referred_users()
+
+
+class AdminAgentSerializer(serializers.ModelSerializer):
+    """Serializer for admin agent management with detailed referral information"""
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.CharField(source='user.email', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+    date_joined = serializers.DateTimeField(source='user.date_joined', read_only=True)
+    referral_link = serializers.SerializerMethodField()
+    referred_users = serializers.SerializerMethodField()
+    total_registrations = serializers.SerializerMethodField()
+    successful_referrals_count = serializers.SerializerMethodField()
+    cbe_account_number = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Agent
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'phone_number', 'cbe_account_number', 'referral_code', 'referral_link',
+            'referrals_count', 'total_registrations', 'successful_referrals_count',
+            'referred_users', 'created_at', 'is_active', 'date_joined'
+        ]
+        read_only_fields = ['id', 'referral_code', 'referrals_count', 'created_at']
+
+    def get_referral_link(self, obj):
+        try:
+            return obj.get_referral_link()
+        except Exception:
+            return ""
+
+    def get_cbe_account_number(self, obj):
+        """Get CBE account number, handling case where field doesn't exist yet"""
+        try:
+            return obj.cbe_account_number or ""
+        except AttributeError:
+            return ""
+
+    def get_total_registrations(self, obj):
+        """Get total number of users who registered with this agent's referral code"""
+        try:
+            return Profile.objects.filter(referred_by__iexact=obj.referral_code).count()
+        except Exception:
+            return 0
+
+    def get_successful_referrals_count(self, obj):
+        """Get count of successful referrals (users who paid or have active subscription)"""
+        try:
+            return obj.get_paid_referrals_count()
+        except Exception:
+            return 0
+
+    def get_referred_users(self, obj):
+        """Get list of referred users with their status"""
+        try:
+            return obj.get_paid_referred_users()
+        except Exception:
+            return []
