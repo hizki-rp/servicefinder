@@ -640,7 +640,25 @@ class PaymentWebhookView(APIView):
             print(f"Successfully processed payment for user {user.id}. New expiry: {dashboard.subscription_end_date}")
             print(f"Payment recorded: {tx_ref} - 600 ETB")
             
-            # 5. Acknowledge receipt to Chapa
+            # 6. Update agent referral count if user was referred by an agent
+            try:
+                from profiles.models import Profile, Agent
+                profile = Profile.objects.filter(user=user).first()
+                if profile and profile.referred_by:
+                    # Find the agent who referred this user
+                    agent = Agent.objects.filter(
+                        referral_code__iexact=profile.referred_by,
+                        is_active=True
+                    ).first()
+                    if agent:
+                        # Update the agent's referral count to reflect only paid users
+                        agent.update_paid_referrals_count()
+                        print(f"Updated agent {agent.user.username}'s referral count to {agent.referrals_count}")
+            except Exception as e:
+                print(f"Error updating agent referral count: {e}")
+                # Don't fail the payment processing if this fails
+            
+            # 7. Acknowledge receipt to Chapa
             return Response({'status': 'success'}, status=status.HTTP_200_OK)
         else:
             print(f"Webhook for tx_ref {tx_ref} was not successful. Status: {webhook_data.get('status')}")
