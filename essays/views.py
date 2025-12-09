@@ -12,51 +12,52 @@ from .serializers import (
 
 
 class EssayListView(generics.ListAPIView):
-    """List all essays"""
+    """List essays - each user only sees their own essays"""
     serializer_class = EssayListSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        # Users can see all essays (or filter by user if needed)
-        queryset = Essay.objects.all()
-        
-        # Optional: Filter by current user's essays only
-        my_essays = self.request.query_params.get('my_essays', None)
-        if my_essays == 'true':
-            queryset = queryset.filter(user=self.request.user)
-        
-        return queryset.select_related('user')
+        # Each user can only see their own essays
+        return Essay.objects.filter(user=self.request.user).select_related('user')
 
 
 class EssayCreateView(generics.CreateAPIView):
-    """Create a new essay template"""
+    """Create a new essay - associated with current user"""
     serializer_class = EssayCreateSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     
     def perform_create(self, serializer):
-        # Set user if authenticated, otherwise None (for templates)
-        user = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(user=user, is_template=True)
+        # Always associate essay with the current authenticated user
+        serializer.save(user=self.request.user, is_template=False)
 
 
 class EssayDetailView(generics.RetrieveAPIView):
-    """Retrieve a specific essay - everyone can view"""
-    queryset = Essay.objects.all()
+    """Retrieve a specific essay - only owner can view"""
     serializer_class = EssayDetailSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # User can only view their own essays
+        return Essay.objects.filter(user=self.request.user)
 
 
 class EssayUpdateView(generics.UpdateAPIView):
-    """Update an essay - everyone can edit templates"""
-    queryset = Essay.objects.all()
+    """Update an essay - only owner can edit"""
     serializer_class = EssayUpdateSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # User can only update their own essays
+        return Essay.objects.filter(user=self.request.user)
 
 
 class EssayDeleteView(generics.DestroyAPIView):
-    """Delete an essay - everyone can delete templates"""
-    queryset = Essay.objects.all()
-    permission_classes = [permissions.AllowAny]
+    """Delete an essay - only owner can delete"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # User can only delete their own essays
+        return Essay.objects.filter(user=self.request.user)
     
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
