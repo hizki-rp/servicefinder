@@ -17,8 +17,15 @@ class EssayListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        # Each user can only see their own essays
-        return Essay.objects.filter(user=self.request.user).select_related('user')
+        # User ID is automatically extracted from the JWT token (Authorization header)
+        user = self.request.user
+        print(f"📝 Fetching essays for user: {user.id} ({user.username})")
+        
+        # Filter essays by the authenticated user only
+        queryset = Essay.objects.filter(user=user).select_related('user')
+        print(f"📝 Found {queryset.count()} essays for user {user.id}")
+        
+        return queryset
 
 
 class EssayCreateView(generics.CreateAPIView):
