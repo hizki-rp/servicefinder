@@ -18,14 +18,11 @@ class EssayListView(generics.ListAPIView):
     
     def get_queryset(self):
         # User ID is automatically extracted from the JWT token (Authorization header)
-        user = self.request.user
-        print(f"📝 Fetching essays for user: {user.id} ({user.username})")
-        
-        # Filter essays by the authenticated user only
-        queryset = Essay.objects.filter(user=user).select_related('user')
-        print(f"📝 Found {queryset.count()} essays for user {user.id}")
-        
-        return queryset
+        # Filter essays by the authenticated user only, exclude templates
+        return Essay.objects.filter(
+            user=self.request.user,
+            is_template=False  # Only show user's personal essays, never templates
+        ).select_related('user')
 
 
 class EssayCreateView(generics.CreateAPIView):
@@ -35,6 +32,7 @@ class EssayCreateView(generics.CreateAPIView):
     
     def perform_create(self, serializer):
         # Always associate essay with the current authenticated user
+        # NEVER allow user essays to be templates
         serializer.save(user=self.request.user, is_template=False)
 
 
@@ -44,8 +42,11 @@ class EssayDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        # User can only view their own essays
-        return Essay.objects.filter(user=self.request.user)
+        # User can only view their own essays, exclude templates
+        return Essay.objects.filter(
+            user=self.request.user,
+            is_template=False  # Only show user's personal essays
+        )
 
 
 class EssayUpdateView(generics.UpdateAPIView):
@@ -54,8 +55,11 @@ class EssayUpdateView(generics.UpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        # User can only update their own essays
-        return Essay.objects.filter(user=self.request.user)
+        # User can only update their own essays, exclude templates
+        return Essay.objects.filter(
+            user=self.request.user,
+            is_template=False  # Only allow updating personal essays
+        )
 
 
 class EssayDeleteView(generics.DestroyAPIView):
@@ -63,8 +67,11 @@ class EssayDeleteView(generics.DestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        # User can only delete their own essays
-        return Essay.objects.filter(user=self.request.user)
+        # User can only delete their own essays, exclude templates
+        return Essay.objects.filter(
+            user=self.request.user,
+            is_template=False  # Only allow deleting personal essays
+        )
     
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()

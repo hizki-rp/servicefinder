@@ -58,11 +58,12 @@ class EssayCreateSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'description', 'content', 'createdAt', 'user']
     
     def create(self, validated_data):
-        """Create essay template - user is optional"""
+        """Create essay - associated with authenticated user"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             validated_data['user'] = request.user
-        validated_data['is_template'] = True  # All essays are templates
+        # NEVER allow user essays to be templates - force to False
+        validated_data['is_template'] = False
         return super().create(validated_data)
     
     def get_user(self, obj):
@@ -95,6 +96,12 @@ class EssayUpdateSerializer(serializers.ModelSerializer):
         instance.title = validated_data.get('title', instance.title)
         instance.description = validated_data.get('description', instance.description)
         instance.content = validated_data.get('content', instance.content)
+        
+        # SAFETY: Never allow user essays to be marked as templates during update
+        template_usernames = ['rakibul', 'miki', 'randall', 'seun', 'zeynep']
+        if instance.user and instance.user.username not in template_usernames:
+            instance.is_template = False
+            
         instance.save()
         return instance
     
