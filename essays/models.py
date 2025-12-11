@@ -20,6 +20,14 @@ class Essay(models.Model):
         verbose_name = "Essay"
         verbose_name_plural = "Essays"
     
+    def save(self, *args, **kwargs):
+        # SAFETY: Never allow user essays to be templates
+        # Only allow templates for system/seeded essays (no user or specific template users)
+        template_usernames = ['rakibul', 'miki', 'randall', 'seun', 'zeynep']
+        if self.user and self.user.username not in template_usernames:
+            self.is_template = False
+        super().save(*args, **kwargs)
+    
     def __str__(self):
         return f"{self.title} by {self.user.username}"
 
