@@ -97,6 +97,7 @@ INSTALLED_APPS = [
      'emails',
      'essays',
      'required_documents',
+     'recommendations',
      'django_celery_beat',
      'django_celery_results',
 ]
