@@ -59,6 +59,7 @@ api_urlpatterns = [
     path('emails/', include('emails.urls')),
     path('', include('essays.urls')),
     path('', include('required_documents.urls')),  # Document upload endpoints
+    path('', include('recommendations.urls')),  # University recommendations
     path('', include(router.urls)), # for contacts app
 ]
 
