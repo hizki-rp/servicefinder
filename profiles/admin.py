@@ -40,55 +40,23 @@ class ProfileAdmin(admin.ModelAdmin):
         ('Profile Details', {
             'fields': ('phone_number', 'bio', 'referred_by')
         }),
-        ('User Groups & Permissions', {
-            'fields': ('user_groups',),
-            'description': 'Manage user roles and permissions'
-        }),
     )
     
     def get_user_groups(self, obj):
         """Display user groups in list view"""
         return ', '.join([group.name for group in obj.user.groups.all()]) or 'None'
     get_user_groups.short_description = 'User Groups'
-    
-    def user_groups(self, obj):
-        """Allow editing user groups in the form"""
-        return obj.user.groups.all()
-    
-    def get_form(self, request, obj=None, **kwargs):
-        form = super().get_form(request, obj, **kwargs)
-        if obj:
-            # Add a custom field for managing groups
-            from django import forms
-            from django.contrib.auth.models import Group
-            
-            class ProfileForm(form):
-                user_groups = forms.ModelMultipleChoiceField(
-                    queryset=Group.objects.all(),
-                    widget=admin.widgets.FilteredSelectMultiple('Groups', False),
-                    required=False,
-                    initial=obj.user.groups.all(),
-                    help_text='Select groups to assign roles like "Agent Manager"'
-                )
-                
-                def save(self, commit=True):
-                    instance = super().save(commit)
-                    if commit and 'user_groups' in self.cleaned_data:
-                        instance.user.groups.set(self.cleaned_data['user_groups'])
-                    return instance
-            
-            return ProfileForm
-        return form
 
 
 @admin.register(Agent)
 class AgentAdmin(admin.ModelAdmin):
-    list_display = ('user', 'referral_code', 'phone_number', 'cbe_account_number', 'referrals_count', 'is_active', 'created_at', 'get_user_groups')
+    list_display = ('user', 'referral_code', 'phone_number', 'cbe_account_number', 'referrals_count', 'is_active', 'created_at', 'get_user_groups', 'is_manager')
     search_fields = ('user__username', 'user__first_name', 'user__last_name', 'referral_code', 'phone_number', 'cbe_account_number')
     list_filter = ('is_active', 'created_at', 'user__groups')
     raw_id_fields = ('user',)
     readonly_fields = ('referral_code', 'referrals_count', 'created_at')
     list_editable = ('cbe_account_number',)
+    actions = ['make_agent_manager', 'remove_agent_manager']
     
     fieldsets = (
         ('User Information', {
@@ -99,10 +67,6 @@ class AgentAdmin(admin.ModelAdmin):
         }),
         ('Statistics', {
             'fields': ('referrals_count', 'is_active')
-        }),
-        ('User Groups & Permissions', {
-            'fields': ('user_groups',),
-            'description': 'Manage agent roles (e.g., Agent Manager)'
         }),
         ('Timestamps', {
             'fields': ('created_at',),
@@ -124,33 +88,57 @@ class AgentAdmin(admin.ModelAdmin):
         return 'Regular Agent'
     get_user_groups.short_description = 'Role'
     
+    def is_manager(self, obj):
+        """Display manager status with icon"""
+        is_manager = obj.user.groups.filter(name='Agent Manager').exists()
+        return '🎯 Manager' if is_manager else '👤 Agent'
+    is_manager.short_description = 'Manager Status'
+    
+    def make_agent_manager(self, request, queryset):
+        """Admin action to make selected agents into Agent Managers"""
+        from django.contrib.auth.models import Group
+        
+        agent_manager_group, created = Group.objects.get_or_create(name='Agent Manager')
+        updated_count = 0
+        
+        for agent in queryset:
+            if not agent.user.groups.filter(name='Agent Manager').exists():
+                agent.user.groups.add(agent_manager_group)
+                updated_count += 1
+        
+        if updated_count == 1:
+            message = f"1 agent was promoted to Agent Manager."
+        else:
+            message = f"{updated_count} agents were promoted to Agent Manager."
+        
+        self.message_user(request, message)
+    make_agent_manager.short_description = "🎯 Promote selected agents to Agent Manager"
+    
+    def remove_agent_manager(self, request, queryset):
+        """Admin action to remove Agent Manager role from selected agents"""
+        from django.contrib.auth.models import Group
+        
+        try:
+            agent_manager_group = Group.objects.get(name='Agent Manager')
+            updated_count = 0
+            
+            for agent in queryset:
+                if agent.user.groups.filter(name='Agent Manager').exists():
+                    agent.user.groups.remove(agent_manager_group)
+                    updated_count += 1
+            
+            if updated_count == 1:
+                message = f"1 agent was demoted from Agent Manager."
+            else:
+                message = f"{updated_count} agents were demoted from Agent Manager."
+            
+            self.message_user(request, message)
+        except Group.DoesNotExist:
+            self.message_user(request, "Agent Manager group does not exist.", level='ERROR')
+    remove_agent_manager.short_description = "👤 Remove Agent Manager role from selected agents"
+    
     def get_readonly_fields(self, request, obj=None):
         # Make referral_code readonly for existing objects
         if obj:
             return self.readonly_fields + ('user',)
         return self.readonly_fields
-    
-    def get_form(self, request, obj=None, **kwargs):
-        form = super().get_form(request, obj, **kwargs)
-        if obj:
-            # Add a custom field for managing groups
-            from django import forms
-            from django.contrib.auth.models import Group
-            
-            class AgentForm(form):
-                user_groups = forms.ModelMultipleChoiceField(
-                    queryset=Group.objects.all(),
-                    widget=admin.widgets.FilteredSelectMultiple('Groups', False),
-                    required=False,
-                    initial=obj.user.groups.all(),
-                    help_text='Select "Agent Manager" to give this agent management permissions'
-                )
-                
-                def save(self, commit=True):
-                    instance = super().save(commit)
-                    if commit and 'user_groups' in self.cleaned_data:
-                        instance.user.groups.set(self.cleaned_data['user_groups'])
-                    return instance
-            
-            return AgentForm
-        return form
