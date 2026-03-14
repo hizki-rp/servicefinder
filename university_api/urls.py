@@ -28,17 +28,29 @@ from universities import views as university_views
 def api_root(request):
     """Simple API root view that returns available endpoints"""
     return JsonResponse({
-        'message': 'Addis Temari API',
-        'version': '1.0',
+        'message': 'ServiceFinder API',
+        'version': '2.0',
         'endpoints': {
             'authentication': {
                 'token': '/api/token/',
                 'register': '/api/register/',
+                'user_info': '/api/providers/auth/user/',
             },
-            'dashboard': '/api/dashboard/',
-            'universities': '/api/universities/',
-            'profile': '/api/profile/',
-            'notifications': '/api/notifications/',
+            'providers': {
+                'profiles': '/api/providers/profiles/',
+                'services': '/api/providers/services/',
+                'nearby': '/api/providers/services/nearby/?lat=9.03&lng=38.76&radius=10',
+                'categories': '/api/providers/categories/',
+                'verifications': '/api/providers/verifications/',
+                'track_call': '/api/providers/track-call/',
+                'reviews': '/api/providers/reviews/',
+            },
+            'legacy': {
+                'dashboard': '/api/dashboard/',
+                'universities': '/api/universities/',
+                'profile': '/api/profile/',
+                'notifications': '/api/notifications/',
+            }
         }
     })
 
@@ -50,6 +62,11 @@ router.register(r'contacts', ContactViewSet, basename='contact')
 # Group all API endpoints under a single prefix for clarity and better organization.
 api_urlpatterns = [
     path('', api_root, name='api-root'),  # API root endpoint
+    
+    # ServiceFinder Provider APIs (NEW - SQLite Safe)
+    path('providers/', include('providers.urls')),
+    
+    # Legacy endpoints (kept for backward compatibility)
     path('', include('universities.urls')),
     path('', include('profiles.urls')),
     path('', include('notifications.urls')),

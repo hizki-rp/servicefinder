@@ -46,6 +46,15 @@ ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_str.split(',')]
 if 'uni-find-api.onrender.com' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('uni-find-api.onrender.com')
 
+# Add local network IPs for mobile testing
+for ip in ['192.168.1.8', '192.168.8.50']:
+    if ip not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ip)
+
+# Allow all local network IPs in development
+if DEBUG:
+    ALLOWED_HOSTS.append('*')
+
 # CSRF trusted origins for development
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
 
@@ -58,12 +67,36 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5174",
     "http://localhost:5173",
     "http://localhost:4173", # LOCAL BUILD
+    "http://localhost:19006",  # Expo web default port
+    "http://localhost:19000",  # Expo Metro bundler
     "https://uni-frontend-lac.vercel.app",
     "https://skyblue-ibis-580217.hostingersite.com",
     "https://addistemari.com",
 ]
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True  # Temporarily allow all origins for debugging
 CORS_ALLOW_CREDENTIALS = True
+
+# Additional CORS settings for development
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
 
 
@@ -100,6 +133,7 @@ INSTALLED_APPS = [
      'recommendations',
      'django_celery_beat',
      'django_celery_results',
+     'providers',  # SQLite-safe provider app (no PostGIS)
 ]
 
 REST_FRAMEWORK = {
@@ -140,31 +174,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'university_api.wsgi.application'
 
-# Set MEDIA_ROOT to the mount path of your persistent disk
-MEDIA_ROOT = os.path.join('/var/data', 'media')
+# Media files — use Render persistent disk in production, local /media in dev
+if os.environ.get('RENDER'):
+    MEDIA_ROOT = os.path.join('/var/data', 'media')
+else:
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
-
-# The persistent disk is not available during the build. To avoid build errors
-# caused by a missing directory, disable file storage checks during the build
-# phase. Use an environment variable like IS_RENDER_BUILD to control this.
-if not os.getenv('IS_RENDER_BUILD'):
-    # Configure your media file storage settings here
-    pass
 
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 # Database configuration
-# For local development: Remove DATABASE_URL from .env to use SQLite
-# For production: DATABASE_URL is set on Render
+# IMPORTANT: Always use SQLite for local development to avoid affecting remote PostgreSQL
+# For production deployment: DATABASE_URL is set on Render
 
-# Check if we should use local SQLite (for development)
-USE_LOCAL_DB = os.environ.get('USE_LOCAL_DB', 'false').lower() == 'true'
+# Force SQLite for local development (safer approach)
+USE_LOCAL_DB = os.environ.get('USE_LOCAL_DB', 'true').lower() == 'true'  # Default to TRUE
 
 if 'DATABASE_URL' in os.environ and not USE_LOCAL_DB:
     # Production (Render) or remote database connection
-    print(f"Using DATABASE_URL: {os.environ.get('DATABASE_URL', 'Not set')[:50]}...")
+    print(f"⚠️  Using remote DATABASE_URL: {os.environ.get('DATABASE_URL', 'Not set')[:50]}...")
     
     # Determine if we're running on Render (production) or locally
     IS_RENDER = os.environ.get('RENDER', 'false').lower() == 'true'
@@ -181,8 +211,8 @@ if 'DATABASE_URL' in os.environ and not USE_LOCAL_DB:
     if not IS_RENDER and 'OPTIONS' not in DATABASES['default']:
         DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
 else:
-    # Local development with SQLite
-    print("📦 Using local SQLite database for development")
+    # Local development with SQLite (DEFAULT and RECOMMENDED)
+    print("📦 Using local SQLite database for development (safe mode)")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -246,9 +276,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ... at the end of settings.py
 
-# Media files (user uploads)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# (MEDIA_ROOT and MEDIA_URL defined above near WSGI_APPLICATION)
 
 #NOTIFICATION AND ASYNC TASKS SETTINGS
 
