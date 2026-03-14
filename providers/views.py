@@ -157,7 +157,7 @@ class ProviderServiceViewSet(viewsets.ModelViewSet):
                 profile = service.provider.provider_profile
                 if profile.is_visible_to_clients:
                     visible_provider_ids.append(service.provider.id)
-            except:
+            except Exception:
                 pass
         
         queryset = queryset.filter(provider_id__in=visible_provider_ids)

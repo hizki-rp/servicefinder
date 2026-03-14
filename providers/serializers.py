@@ -113,10 +113,16 @@ class ProviderServiceListSerializer(serializers.ModelSerializer):
         return obj.provider.get_full_name() or obj.provider.username
     
     def get_provider_rating(self, obj):
-        return obj.provider.provider_profile.rating
+        try:
+            return obj.provider.provider_profile.rating
+        except Exception:
+            return 0.0
     
     def get_provider_reviews(self, obj):
-        return obj.provider.provider_profile.total_reviews
+        try:
+            return obj.provider.provider_profile.total_reviews
+        except Exception:
+            return 0
     
     def get_distance(self, obj):
         """Distance in kilometers (calculated in viewset)"""

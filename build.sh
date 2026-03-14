@@ -8,6 +8,9 @@ pip install -r requirements.txt
 # Collect static files
 python manage.py collectstatic --noinput
 
+# Fix any missing columns from inconsistent migration history (safe, idempotent)
+python fix_remote_db.py
+
 # Create any new migrations
 python manage.py makemigrations
 

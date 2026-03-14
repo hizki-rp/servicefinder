@@ -50,7 +50,18 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         providers_per_category = options['providers_per_category']
-        
+
+        # Disconnect the UserDashboard signal to avoid errors on fresh DBs
+        # where universities tables may not exist yet
+        try:
+            from universities.models import create_user_dashboard
+            from django.db.models.signals import post_save
+            from django.contrib.auth.models import User as AuthUser
+            post_save.disconnect(create_user_dashboard, sender=AuthUser)
+            self.stdout.write(self.style.WARNING('⚠️  Disconnected UserDashboard signal for seeding'))
+        except Exception:
+            pass
+
         self.stdout.write(self.style.SUCCESS(
             f'\n🌱 Seeding {providers_per_category} providers for each of {len(self.CATEGORIES)} categories...\n'
         ))
