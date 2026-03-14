@@ -42,9 +42,10 @@ DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 ALLOWED_HOSTS_str = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,uni-find-api.onrender.com')
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_str.split(',')]
 
-# Ensure Render domain is always included
-if 'uni-find-api.onrender.com' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('uni-find-api.onrender.com')
+# Ensure known Render domains are always included
+for domain in ['uni-find-api.onrender.com', 'servicefinder-fvon.onrender.com']:
+    if domain not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(domain)
 
 # Add local network IPs for mobile testing
 for ip in ['192.168.1.8', '192.168.8.50']:
@@ -55,8 +56,10 @@ for ip in ['192.168.1.8', '192.168.8.50']:
 if DEBUG:
     ALLOWED_HOSTS.append('*')
 
-# CSRF trusted origins for development
+# CSRF trusted origins
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
+if 'https://servicefinder-fvon.onrender.com' not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append('https://servicefinder-fvon.onrender.com')
 
 # Trust the 'X-Forwarded-Proto' header from the reverse proxy (like Render)
 # This ensures request.build_absolute_uri() generates https:// URLs correctly.
