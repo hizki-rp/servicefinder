@@ -26,6 +26,7 @@ from .views import (
     admin_send_broadcast,
     admin_broadcast_list,
     admin_broadcast_preview,
+    taxonomy_list,
 )
 
 router = DefaultRouter()
@@ -70,4 +71,7 @@ urlpatterns = [
     path('admin/broadcast/send/', admin_send_broadcast, name='admin-send-broadcast'),
     path('admin/broadcast/list/', admin_broadcast_list, name='admin-broadcast-list'),
     path('admin/broadcast/preview/', admin_broadcast_preview, name='admin-broadcast-preview'),
+
+    # Taxonomy
+    path('taxonomy/', taxonomy_list, name='taxonomy-list'),
 ]

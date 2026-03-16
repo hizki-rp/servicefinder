@@ -16,6 +16,8 @@ from .models import (
     haversine_distance,
     OTPVerification,
     UserProfile,
+    ServiceCategory,
+    ServiceSubCategory,
 )
 from .serializers import (
     ProviderProfileSerializer,
@@ -1511,3 +1513,36 @@ def admin_broadcast_preview(request):
             'city_filter': temp_broadcast.city_filter or 'None',
         }
     })
+
+
+# ============================================
+# TAXONOMY ENDPOINTS
+# ============================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def taxonomy_list(request):
+    """
+    GET /api/providers/taxonomy/
+    Returns all 8 master categories with their sub-categories.
+    Uses select_related to avoid N+1 queries.
+    """
+    categories = ServiceCategory.objects.prefetch_related('subcategories').all()
+    data = []
+    for cat in categories:
+        data.append({
+            'id': cat.id,
+            'name': cat.name,
+            'slug': cat.slug,
+            'icon': cat.icon,
+            'subcategories': [
+                {
+                    'id': sub.id,
+                    'name': sub.name,
+                    'slug': sub.slug,
+                    'icon': sub.icon,
+                }
+                for sub in cat.subcategories.all()
+            ]
+        })
+    return Response(data)

@@ -9,6 +9,47 @@ import random
 import string
 
 
+# ============================================
+# TWO-TIER TAXONOMY
+# ============================================
+
+class ServiceCategory(models.Model):
+    """8 master categories (Home Services, Tech & Digital, etc.)"""
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    icon = models.CharField(max_length=50, default='briefcase')
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = 'Service Category'
+        verbose_name_plural = 'Service Categories'
+
+    def __str__(self):
+        return self.name
+
+
+class ServiceSubCategory(models.Model):
+    """100+ sub-categories linked to a master category"""
+    category = models.ForeignKey(
+        ServiceCategory,
+        on_delete=models.CASCADE,
+        related_name='subcategories'
+    )
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, unique=True)
+    icon = models.CharField(max_length=50, default='tool')
+
+    class Meta:
+        ordering = ['category__order', 'name']
+        verbose_name = 'Service Sub-Category'
+        verbose_name_plural = 'Service Sub-Categories'
+        unique_together = [['category', 'name']]
+
+    def __str__(self):
+        return f"{self.category.name} › {self.name}"
+
+
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
     Calculate the great circle distance between two points 
@@ -336,7 +377,15 @@ class ProviderService(models.Model):
     )
     service_category = models.CharField(
         max_length=100,
-        help_text="e.g., 'Plumber', 'Electrician', 'Cleaner'"
+        help_text="Legacy text field — use subcategory FK for new services"
+    )
+    subcategory = models.ForeignKey(
+        'ServiceSubCategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='services',
+        help_text="Two-tier taxonomy sub-category"
     )
     description = models.TextField()
     

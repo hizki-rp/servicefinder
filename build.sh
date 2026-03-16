@@ -20,5 +20,8 @@ python manage.py migrate
 # Create default groups
 python manage.py create_groups
 
+# Seed two-tier taxonomy (idempotent — safe to run every deploy)
+python manage.py seed_taxonomy
+
 # Create superuser if environment variables are set
 python manage.py create_superuser

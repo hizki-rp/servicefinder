@@ -9,7 +9,9 @@ from .models import (
     ProviderService, 
     ProviderVerification, 
     CallLog, 
-    Review
+    Review,
+    ServiceCategory,
+    ServiceSubCategory,
 )
 
 
@@ -788,6 +790,24 @@ class ReviewAdmin(admin.ModelAdmin):
 
 
 # Customize admin site header and title
-admin.site.site_header = 'ServiceFinder Admin'
-admin.site.site_title = 'ServiceFinder Admin Portal'
-admin.site.index_title = 'Welcome to ServiceFinder Administration'
+admin.site.site_header = 'Mert Service Admin'
+admin.site.site_title = 'Mert Service Admin Portal'
+admin.site.index_title = 'Welcome to Mert Service Administration'
+
+
+@admin.register(ServiceCategory)
+class ServiceCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug', 'icon', 'order', 'subcategory_count']
+    ordering = ['order']
+
+    def subcategory_count(self, obj):
+        return obj.subcategories.count()
+    subcategory_count.short_description = 'Sub-categories'
+
+
+@admin.register(ServiceSubCategory)
+class ServiceSubCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'category', 'slug', 'icon']
+    list_filter = ['category']
+    search_fields = ['name', 'category__name']
+    ordering = ['category__order', 'name']

@@ -69,14 +69,16 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5174",
     "http://localhost:5173",
-    "http://localhost:4173", # LOCAL BUILD
+    "http://localhost:4173",
     "http://localhost:19006",  # Expo web default port
     "http://localhost:19000",  # Expo Metro bundler
+    "http://localhost:8081",   # Expo web dev server
+    "http://localhost:8082",
     "https://uni-frontend-lac.vercel.app",
     "https://skyblue-ibis-580217.hostingersite.com",
     "https://addistemari.com",
 ]
-CORS_ALLOW_ALL_ORIGINS = True  # Temporarily allow all origins for debugging
+CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins (handles dynamic ports)
 CORS_ALLOW_CREDENTIALS = True
 
 # Additional CORS settings for development

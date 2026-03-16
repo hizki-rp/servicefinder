@@ -83,9 +83,11 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
 
 class ProviderServiceListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for service listings"""
+    provider_id = serializers.SerializerMethodField()
     provider_name = serializers.SerializerMethodField()
     provider_rating = serializers.SerializerMethodField()
     provider_reviews = serializers.SerializerMethodField()
+    provider_phone = serializers.SerializerMethodField()
     distance = serializers.SerializerMethodField()
     
     class Meta:
@@ -101,14 +103,19 @@ class ProviderServiceListSerializer(serializers.ModelSerializer):
             'city',
             'latitude',
             'longitude',
+            'provider_id',
             'provider_name',
             'provider_rating',
             'provider_reviews',
+            'provider_phone',
             'distance',
             'views_count',
             'created_at',
         ]
     
+    def get_provider_id(self, obj):
+        return obj.provider.id
+
     def get_provider_name(self, obj):
         return obj.provider.get_full_name() or obj.provider.username
     
@@ -123,6 +130,12 @@ class ProviderServiceListSerializer(serializers.ModelSerializer):
             return obj.provider.provider_profile.total_reviews
         except Exception:
             return 0
+
+    def get_provider_phone(self, obj):
+        try:
+            return obj.provider.provider_profile.phone_number
+        except Exception:
+            return None
     
     def get_distance(self, obj):
         """Distance in kilometers (calculated in viewset)"""
