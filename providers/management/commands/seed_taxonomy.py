@@ -102,7 +102,7 @@ TAXONOMY = [
             ('Music Teacher', 'music'),
             ('Event Planner / Decorator', 'calendar'),
             ('Caterer / DJ', 'utensils'),
-            ('Fitness Trainer', 'dumbbell'),
+            ('Personal Trainer', 'dumbbell'),
         ],
     },
 ]
@@ -134,13 +134,9 @@ class Command(BaseCommand):
                 cat.save(update_fields=['icon', 'order'])
 
             for sub_name, sub_icon in cat_data['subs']:
-                base_slug = slugify(sub_name)
-                slug = base_slug
-                # Ensure unique slug
-                counter = 1
-                while ServiceSubCategory.objects.filter(slug=slug).exclude(category=cat).exists():
-                    slug = f'{base_slug}-{counter}'
-                    counter += 1
+                # Prefix slug with category slug to guarantee global uniqueness
+                base_slug = f"{slugify(cat_data['name'])}-{slugify(sub_name)}"
+                slug = base_slug[:100]  # respect max_length
 
                 sub, sub_created = ServiceSubCategory.objects.get_or_create(
                     category=cat,

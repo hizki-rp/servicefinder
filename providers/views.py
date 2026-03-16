@@ -1525,24 +1525,26 @@ def taxonomy_list(request):
     """
     GET /api/providers/taxonomy/
     Returns all 8 master categories with their sub-categories.
-    Uses select_related to avoid N+1 queries.
     """
-    categories = ServiceCategory.objects.prefetch_related('subcategories').all()
-    data = []
-    for cat in categories:
-        data.append({
-            'id': cat.id,
-            'name': cat.name,
-            'slug': cat.slug,
-            'icon': cat.icon,
-            'subcategories': [
-                {
-                    'id': sub.id,
-                    'name': sub.name,
-                    'slug': sub.slug,
-                    'icon': sub.icon,
-                }
-                for sub in cat.subcategories.all()
-            ]
-        })
-    return Response(data)
+    try:
+        categories = ServiceCategory.objects.prefetch_related('subcategories').all()
+        data = []
+        for cat in categories:
+            data.append({
+                'id': cat.id,
+                'name': cat.name,
+                'slug': cat.slug,
+                'icon': cat.icon,
+                'subcategories': [
+                    {
+                        'id': sub.id,
+                        'name': sub.name,
+                        'slug': sub.slug,
+                        'icon': sub.icon,
+                    }
+                    for sub in cat.subcategories.all()
+                ]
+            })
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
