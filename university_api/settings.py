@@ -195,24 +195,25 @@ MEDIA_URL = '/media/'
 # For production deployment: DATABASE_URL is set on Render
 
 # Force SQLite for local development (safer approach)
-USE_LOCAL_DB = os.environ.get('USE_LOCAL_DB', 'true').lower() == 'true'  # Default to TRUE
+_use_local_raw = os.environ.get('USE_LOCAL_DB', 'true').strip().lower()
+USE_LOCAL_DB = _use_local_raw not in ('false', '0', 'no')
+
+# Also treat presence of RENDER env var as "use remote DB"
+IS_RENDER = os.environ.get('RENDER', '').strip().lower() in ('true', '1', 'yes')
+if IS_RENDER:
+    USE_LOCAL_DB = False
 
 if 'DATABASE_URL' in os.environ and not USE_LOCAL_DB:
-    # Production (Render) or remote database connection
     print(f"⚠️  Using remote DATABASE_URL: {os.environ.get('DATABASE_URL', 'Not set')[:50]}...")
-    
-    # Determine if we're running on Render (production) or locally
-    IS_RENDER = os.environ.get('RENDER', 'false').lower() == 'true'
     
     DATABASES = {
         'default': dj_database_url.config(
             default=os.environ.get('DATABASE_URL'),
             conn_max_age=600,
-            ssl_require=IS_RENDER  # Only require SSL on Render, not locally
+            ssl_require=IS_RENDER
         )
     }
     
-    # For local connections to remote DB, add SSL mode
     if not IS_RENDER and 'OPTIONS' not in DATABASES['default']:
         DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
 else:

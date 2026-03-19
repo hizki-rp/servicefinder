@@ -1269,11 +1269,11 @@ def register_push_token(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Create or update token
+    # Create or update token — use only `token` as lookup key since it's unique
     push_token, created = PushToken.objects.update_or_create(
-        user=request.user,
         token=token,
         defaults={
+            'user': request.user,
             'device_type': device_type,
             'is_active': True
         }
