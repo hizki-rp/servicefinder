@@ -287,8 +287,12 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 #NOTIFICATION AND ASYNC TASKS SETTINGS
 
 # Email Configuration
-# Use Gmail SMTP for both development and production
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# On Render (production), use dummy backend to avoid SMTP blocking gunicorn workers.
+# SMTP on Render free tier causes worker timeouts — use Celery for async email instead.
+if IS_RENDER:
+    EMAIL_BACKEND = 'django.core.mail.backends.dummy.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True

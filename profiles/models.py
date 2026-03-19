@@ -197,8 +197,13 @@ def save_user_profile(sender, instance, **kwargs):
 def send_welcome_email_on_registration(sender, instance, created, **kwargs):
     """
     Send welcome email to new users upon registration.
-    Runs in a background thread so it never blocks the request.
+    Skipped on Render (production) — SMTP blocks gunicorn workers.
+    Runs in a background thread locally so it never blocks the request.
     """
+    import os
+    if os.environ.get('RENDER'):
+        return  # Never send email synchronously on Render — use Celery instead
+
     if created and instance.email:
         import threading
 
