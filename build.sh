@@ -25,3 +25,15 @@ python manage.py seed_taxonomy
 
 # Create superuser if environment variables are set
 python manage.py create_superuser
+
+# Force-reset admin password to ensure access
+python manage.py shell -c "
+from django.contrib.auth.models import User
+u, created = User.objects.get_or_create(username='admin')
+u.set_password('MertAdmin2024!')
+u.is_staff = True
+u.is_superuser = True
+u.is_active = True
+u.save()
+print('Admin password reset to MertAdmin2024!')
+"
