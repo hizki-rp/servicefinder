@@ -26,5 +26,8 @@ RUN python manage.py collectstatic --noinput
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "university_api.wsgi:application"]
+# Make startup script executable
+RUN chmod +x start.sh
+
+# Run migrations + admin reset + gunicorn
+CMD ["./start.sh"]
