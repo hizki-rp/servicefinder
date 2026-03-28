@@ -102,21 +102,21 @@ TAXONOMY = [
             ('Music Teacher', 'music'),
             ('Event Planner / Decorator', 'calendar'),
             ('Caterer / DJ', 'utensils'),
-            ('Personal Trainer', 'dumbbell'),
+            ('Fitness Trainer / Coach', 'dumbbell'),
         ],
     },
 ]
 
 
 class Command(BaseCommand):
-    help = 'Seeds the two-tier service taxonomy (8 categories, 40 sub-categories)'
+    help = 'Seeds the two-tier service taxonomy (idempotent)'
 
     def handle(self, *args, **options):
         total_cats = 0
         total_subs = 0
 
         for cat_data in TAXONOMY:
-            cat, created = ServiceCategory.objects.get_or_create(
+            cat, created = ServiceCategory.objects.update_or_create(
                 name=cat_data['name'],
                 defaults={
                     'slug': slugify(cat_data['name']),
@@ -126,19 +126,12 @@ class Command(BaseCommand):
             )
             if created:
                 total_cats += 1
-                self.stdout.write(self.style.SUCCESS(f'  ✓ Category: {cat.name}'))
-            else:
-                # Update icon/order in case they changed
-                cat.icon = cat_data['icon']
-                cat.order = cat_data['order']
-                cat.save(update_fields=['icon', 'order'])
+            self.stdout.write(f'  {"✓ Created" if created else "↻ Updated"} category: {cat.name}')
 
             for sub_name, sub_icon in cat_data['subs']:
-                # Prefix slug with category slug to guarantee global uniqueness
-                base_slug = f"{slugify(cat_data['name'])}-{slugify(sub_name)}"
-                slug = base_slug[:100]  # respect max_length
+                slug = f"{slugify(cat_data['name'])}-{slugify(sub_name)}"[:100]
 
-                sub, sub_created = ServiceSubCategory.objects.get_or_create(
+                sub, sub_created = ServiceSubCategory.objects.update_or_create(
                     category=cat,
                     name=sub_name,
                     defaults={'slug': slug, 'icon': sub_icon}
@@ -148,5 +141,5 @@ class Command(BaseCommand):
                     self.stdout.write(f'    + {sub_name}')
 
         self.stdout.write(self.style.SUCCESS(
-            f'\nDone! Created {total_cats} categories, {total_subs} sub-categories.'
+            f'\nDone! {total_cats} new categories, {total_subs} new sub-categories.'
         ))
