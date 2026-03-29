@@ -19,6 +19,10 @@ services:
         value: "servicefinder-fvon.onrender.com"
       - key: CSRF_TRUSTED_ORIGINS
         value: "https://servicefinder-fvon.onrender.com"
+      - key: EMAIL_HOST_USER
+        value: "mertservice@gmail.com"
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
     disk:
       name: media-storage
       mountPath: /var/data

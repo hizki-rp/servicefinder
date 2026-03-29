@@ -286,21 +286,21 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 #NOTIFICATION AND ASYNC TASKS SETTINGS
 
-# Email Configuration
-# On Render (production), use dummy backend to avoid SMTP blocking gunicorn workers.
-# SMTP on Render free tier causes worker timeouts — use Celery for async email instead.
-if IS_RENDER:
-    EMAIL_BACKEND = 'django.core.mail.backends.dummy.EmailBackend'
-else:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# Email Configuration — credentials from environment variables
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'addistemari.m@gmail.com'
-EMAIL_HOST_PASSWORD = 'nmfs wzua fryu mtks'
-DEFAULT_FROM_EMAIL = 'addistemari.m@gmail.com'
 EMAIL_USE_SSL = False
-EMAIL_TIMEOUT = 30
+EMAIL_TIMEOUT = 10  # short timeout prevents gunicorn worker kills
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER', 'noreply@mertservice.com')
+
+# Use real SMTP only when credentials are set; fall back to console logging
+if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 
 # Celery Configuration
