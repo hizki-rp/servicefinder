@@ -1413,6 +1413,31 @@ def admin_send_broadcast(request):
     broadcast.sent_at = timezone.now()
     broadcast.save()
     
+    # ── Email broadcast (optional) ──────────────────────────────────────────
+    include_email = request.data.get('include_email', False)
+    email_success = 0
+    email_failure = 0
+
+    if include_email:
+        from django.core.mail import send_mail
+        from django.conf import settings
+
+        # Collect emails of target provider users
+        provider_users = User.objects.filter(id__in=provider_user_ids).exclude(email='')
+        for u in provider_users:
+            try:
+                send_mail(
+                    subject=title,
+                    message=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[u.email],
+                    fail_silently=True,
+                )
+                email_success += 1
+            except Exception as e:
+                print(f"Email failed for {u.email}: {e}")
+                email_failure += 1
+
     return Response({
         'success': True,
         'message': 'Broadcast sent successfully',
@@ -1425,6 +1450,8 @@ def admin_send_broadcast(request):
             'failure_count': broadcast.failure_count,
             'status': broadcast.status,
             'sent_at': broadcast.sent_at,
+            'email_success': email_success,
+            'email_failure': email_failure,
         }
     })
 
@@ -1548,3 +1575,68 @@ def taxonomy_list(request):
         return Response(data)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_send_email(request):
+    """
+    Send a custom email to one or all provider users (admin only).
+    POST /api/providers/admin/email/send/
+    Body: {
+        "subject": "...",
+        "body": "...",
+        "recipient": "specific@email.com" | null  (null = all providers with emails)
+        "target_audience": "all|verified|pending"
+    }
+    """
+    from django.core.mail import send_mail
+    from django.conf import settings
+
+    if not request.user.is_staff:
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+
+    subject = request.data.get('subject', '').strip()
+    body = request.data.get('body', '').strip()
+    recipient = request.data.get('recipient', '').strip()
+    target_audience = request.data.get('target_audience', 'all')
+
+    if not subject or not body:
+        return Response({'error': 'Subject and body are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Build recipient list
+    if recipient:
+        recipients = [recipient]
+    else:
+        # All provider users with emails based on audience filter
+        qs = ProviderProfile.objects.select_related('user').exclude(user__email='')
+        if target_audience == 'verified':
+            qs = qs.filter(is_verified=True)
+        elif target_audience == 'pending':
+            qs = qs.filter(is_verified=False)
+        recipients = list(qs.values_list('user__email', flat=True).distinct())
+
+    if not recipients:
+        return Response({'error': 'No recipients found'}, status=status.HTTP_400_BAD_REQUEST)
+
+    success, failure = 0, 0
+    for email in recipients:
+        try:
+            send_mail(
+                subject=subject,
+                message=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+            success += 1
+        except Exception as e:
+            print(f'Email failed for {email}: {e}')
+            failure += 1
+
+    return Response({
+        'success': True,
+        'sent': success,
+        'failed': failure,
+        'total': len(recipients),
+    })
