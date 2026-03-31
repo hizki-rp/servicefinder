@@ -13,6 +13,9 @@ python manage.py seed_taxonomy
 echo "==> Resetting admin account..."
 python manage.py reset_admin
 
+echo "==> Sending test email..."
+python manage.py send_test_email hiblen247@gmail.com || true
+
 echo "==> Starting gunicorn..."
 exec gunicorn university_api.wsgi:application \
   --bind "0.0.0.0:${PORT:-8000}" \
