@@ -8,6 +8,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
+import logging
+
+logger = logging.getLogger(__name__)
 from .models import (
     ProviderProfile,
     ProviderService,
@@ -722,47 +725,91 @@ def otp_verify(request):
 
 
 @api_view(['POST'])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upgrade_to_provider(request):
     """
     Upgrade current user to provider status.
     Creates ProviderProfile for existing user.
     """
-    # Check if already a provider
-    if hasattr(request.user, 'provider_profile'):
-        return Response(
-            {'error': 'You are already a provider'},
-            status=status.HTTP_400_BAD_REQUEST
+    import traceback
+    
+    try:
+        # Debug logging
+        logger.info(f"🔄 Upgrade to provider request from user: {request.user.username}")
+        logger.info(f"📦 Request data: {dict(request.data)}")
+        logger.info(f"👤 User has provider_profile: {hasattr(request.user, 'provider_profile')}")
+        logger.info(f"👤 User has user_profile: {hasattr(request.user, 'user_profile')}")
+        
+        # Check if already a provider (use get_or_create pattern)
+        if hasattr(request.user, 'provider_profile'):
+            logger.info(f"✅ User already has provider_profile")
+            return Response(
+                {
+                    'message': 'You are already a provider',
+                    'profile': ProviderProfileSerializer(request.user.provider_profile).data
+                },
+                status=status.HTTP_200_OK
+            )
+        
+        # Get required data
+        city = request.data.get('city', 'Addis Ababa')
+        latitude = request.data.get('latitude')
+        longitude = request.data.get('longitude')
+        
+        # Get phone number from multiple sources
+        phone_number = None
+        if hasattr(request.user, 'user_profile') and request.user.user_profile.phone_number:
+            phone_number = request.user.user_profile.phone_number
+            logger.info(f"📞 Using phone from user_profile: {phone_number}")
+        elif request.data.get('phone_number'):
+            phone_number = request.data.get('phone_number')
+            logger.info(f"📞 Using phone from request: {phone_number}")
+        else:
+            # Fallback: use a placeholder if no phone available
+            phone_number = '0000000000'
+            logger.warning(f"⚠️ No phone number found, using placeholder: {phone_number}")
+        
+        logger.info(f"🏗️ Creating ProviderProfile with: city={city}, phone={phone_number}, lat={latitude}, lon={longitude}")
+        
+        # Create provider profile with get_or_create for safety
+        provider_profile, created = ProviderProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'phone_number': phone_number,
+                'city': city,
+                'latitude': latitude,
+                'longitude': longitude,
+            }
         )
-    
-    # Get required data
-    phone_number = request.data.get('phone_number')
-    city = request.data.get('city', 'Addis Ababa')
-    latitude = request.data.get('latitude')
-    longitude = request.data.get('longitude')
-    
-    # If user has UserProfile, use that phone number
-    if hasattr(request.user, 'user_profile'):
-        phone_number = request.user.user_profile.phone_number
-    elif not phone_number:
+        
+        if not created:
+            # Update existing profile
+            logger.info(f"📝 Updating existing provider_profile")
+            provider_profile.city = city
+            if latitude:
+                provider_profile.latitude = latitude
+            if longitude:
+                provider_profile.longitude = longitude
+            provider_profile.save()
+        
+        logger.info(f"✅ Provider profile {'created' if created else 'updated'} successfully")
+        
+        return Response({
+            'message': f"Successfully {'upgraded to' if created else 'updated'} provider",
+            'profile': ProviderProfileSerializer(provider_profile).data
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"❌ UPGRADE TO PROVIDER ERROR: {str(e)}")
+        logger.error(traceback.format_exc())
         return Response(
-            {'error': 'Phone number is required'},
-            status=status.HTTP_400_BAD_REQUEST
+            {
+                'error': str(e),
+                'detail': 'Failed to create provider profile. Please contact support.'
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-    
-    # Create provider profile
-    provider_profile = ProviderProfile.objects.create(
-        user=request.user,
-        phone_number=phone_number,
-        city=city,
-        latitude=latitude,
-        longitude=longitude,
-    )
-    
-    return Response({
-        'message': 'Successfully upgraded to provider',
-        'profile': ProviderProfileSerializer(provider_profile).data
-    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
