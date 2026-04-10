@@ -725,7 +725,6 @@ def otp_verify(request):
 
 
 @api_view(['POST'])
-@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upgrade_to_provider(request):
     """
