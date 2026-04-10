@@ -3,6 +3,40 @@
 from django.db import migrations, models
 
 
+def add_is_email_verified_if_not_exists(apps, schema_editor):
+    """
+    Add is_email_verified field only if it doesn't exist.
+    This handles the case where the field was added manually.
+    """
+    from django.db import connection
+    with connection.cursor() as cursor:
+        # Check if column exists
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='providers_userprofile' 
+            AND column_name='is_email_verified';
+        """)
+        exists = cursor.fetchone()
+        
+        if not exists:
+            # Column doesn't exist, add it
+            cursor.execute("""
+                ALTER TABLE providers_userprofile 
+                ADD COLUMN is_email_verified BOOLEAN DEFAULT FALSE NOT NULL;
+            """)
+
+
+def reverse_add_is_email_verified(apps, schema_editor):
+    """Reverse operation - remove the field if it was added"""
+    from django.db import connection
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            ALTER TABLE providers_userprofile 
+            DROP COLUMN IF EXISTS is_email_verified;
+        """)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,10 +44,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='userprofile',
-            name='is_email_verified',
-            field=models.BooleanField(default=False),
+        # Use RunPython to conditionally add the field
+        migrations.RunPython(
+            add_is_email_verified_if_not_exists,
+            reverse_add_is_email_verified
         ),
         migrations.AlterField(
             model_name='providerverification',
