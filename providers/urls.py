@@ -29,6 +29,7 @@ from .views import (
     taxonomy_list,
     admin_send_email,
 )
+from .email_auth import email_request, email_verify
 
 router = DefaultRouter()
 router.register(r'profiles', ProviderProfileViewSet, basename='provider-profile')
@@ -47,9 +48,13 @@ urlpatterns = [
     path('categories/', service_categories_list, name='service-categories'),
     path('register/', register, name='register'),
     
-    # OTP endpoints
+    # OTP endpoints (legacy - deprecated)
     path('auth/otp-request/', otp_request, name='otp-request'),
     path('auth/otp-verify/', otp_verify, name='otp-verify'),
+    
+    # Email verification endpoints (new)
+    path('auth/email-request/', email_request, name='email-request'),
+    path('auth/email-verify/', email_verify, name='email-verify'),
     
     # Upgrade endpoint
     path('upgrade-to-provider/', upgrade_to_provider, name='upgrade-to-provider'),

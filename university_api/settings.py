@@ -206,16 +206,27 @@ if IS_RENDER:
 if 'DATABASE_URL' in os.environ and not USE_LOCAL_DB:
     print(f"⚠️  Using remote DATABASE_URL: {os.environ.get('DATABASE_URL', 'Not set')[:50]}...")
     
+    # Parse the database URL
     DATABASES = {
         'default': dj_database_url.config(
             default=os.environ.get('DATABASE_URL'),
             conn_max_age=600,
-            ssl_require=IS_RENDER
+            conn_health_checks=True,
         )
     }
     
-    if not IS_RENDER and 'OPTIONS' not in DATABASES['default']:
-        DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
+    # Configure SSL for Render PostgreSQL
+    # Render requires SSL but with 'prefer' mode to handle connection issues
+    if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+        if 'OPTIONS' not in DATABASES['default']:
+            DATABASES['default']['OPTIONS'] = {}
+        
+        # Use 'prefer' SSL mode - tries SSL but falls back if needed
+        DATABASES['default']['OPTIONS']['sslmode'] = 'prefer'
+        
+        # Alternatively, disable SSL verification (less secure but works)
+        # Uncomment if 'prefer' doesn't work:
+        # DATABASES['default']['OPTIONS']['sslmode'] = 'disable'
 else:
     # Local development with SQLite (DEFAULT and RECOMMENDED)
     print("📦 Using local SQLite database for development (safe mode)")

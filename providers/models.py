@@ -119,7 +119,7 @@ class OTPVerification(models.Model):
 class UserProfile(models.Model):
     """
     Extended profile for regular users (reviewers).
-    Stores phone number for OTP-authenticated users.
+    Stores phone number for OTP-authenticated users or email for email-authenticated users.
     Can be upgraded to ProviderProfile.
     """
     user = models.OneToOneField(
@@ -127,8 +127,9 @@ class UserProfile(models.Model):
         on_delete=models.CASCADE,
         related_name='user_profile'
     )
-    phone_number = models.CharField(max_length=20, unique=True)
+    phone_number = models.CharField(max_length=20, unique=True, null=True, blank=True)
     is_phone_verified = models.BooleanField(default=False)
+    is_email_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -139,7 +140,8 @@ class UserProfile(models.Model):
         return not hasattr(self.user, 'provider_profile')
     
     def __str__(self):
-        return f"{self.user.username} - {self.phone_number}"
+        identifier = self.phone_number or self.user.email or self.user.username
+        return f"{self.user.username} - {identifier}"
 
 
 class ProviderProfile(models.Model):
