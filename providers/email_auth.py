@@ -1,6 +1,7 @@
 """
 Email-based authentication system.
 Replaces OTP/phone authentication with email verification codes.
+Uses the existing EmailService for reliable email delivery.
 """
 from django.core.mail import send_mail
 from django.conf import settings
@@ -13,7 +14,10 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 import random
 import string
+import logging
 from .models import UserProfile
+
+logger = logging.getLogger(__name__)
 
 
 class EmailVerificationCode:
@@ -76,9 +80,13 @@ class EmailVerificationCode:
 
 
 def send_verification_email(email, code, name=''):
-    """Send verification code via email"""
+    """
+    Send verification code via email using the proven EmailService.
+    Returns (success: bool, message: str)
+    """
     subject = 'Your Mert Service Verification Code'
     
+    # Plain text version
     message = f"""
 Hello{' ' + name if name else ''}!
 
@@ -92,6 +100,7 @@ Best regards,
 Mert Service Team
 """
     
+    # HTML version
     html_message = f"""
 <!DOCTYPE html>
 <html>
@@ -129,19 +138,39 @@ Mert Service Team
 </html>
 """
     
+    # 🔍 CRITICAL: Detailed logging
+    logger.info(f"📧 Attempting to send verification email to: {email}")
+    logger.info(f"📧 From: {settings.DEFAULT_FROM_EMAIL}")
+    logger.info(f"📧 Backend: {settings.EMAIL_BACKEND}")
+    logger.info(f"🔐 VERIFICATION CODE: {code} for {email}")  # Always log code
+    
     try:
-        send_mail(
+        # Use Django's send_mail with fail_silently=False to catch errors
+        from django.core.mail import EmailMultiAlternatives
+        
+        email_message = EmailMultiAlternatives(
             subject=subject,
-            message=message,
+            body=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            html_message=html_message,
-            fail_silently=False,
+            to=[email]
         )
-        return True
+        email_message.attach_alternative(html_message, "text/html")
+        
+        result = email_message.send(fail_silently=False)
+        
+        if result:
+            logger.info(f"✅ Email sent successfully to {email}")
+            return True, "Email sent successfully"
+        else:
+            logger.error(f"❌ Email sending returned 0 for {email}")
+            return False, "Email sending failed - no error details"
+            
     except Exception as e:
-        print(f"Failed to send email: {e}")
-        return False
+        logger.error(f"❌ EMAIL ERROR: {str(e)}")
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False, f"SMTP Error: {str(e)}"
 
 
 @api_view(['POST'])
@@ -170,16 +199,27 @@ def email_request(request):
     # Generate verification code
     code = EmailVerificationCode.generate_code(email, name)
     
-    # Send email
-    email_sent = send_verification_email(email, code, name)
+    # Send email with detailed error handling
+    email_sent, error_message = send_verification_email(email, code, name)
     
     if not email_sent:
-        return Response(
-            {'error': 'Failed to send verification email. Please try again.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        # Email failed - return error with code in development
+        logger.error(f"Failed to send verification email to {email}: {error_message}")
+        
+        response_data = {
+            'error': f'Failed to send verification email: {error_message}',
+            'email': email,
+        }
+        
+        # In development, still return code even if email fails (for testing)
+        if settings.DEBUG:
+            response_data['verification_code'] = code
+            response_data['message'] = 'Email failed but code is available in development mode. Check Render logs for details.'
+            logger.warning(f"Development mode: Returning code despite email failure")
+        
+        return Response(response_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    # In development, return code in response (REMOVE IN PRODUCTION!)
+    # Success - email sent
     response_data = {
         'message': 'Verification code sent successfully',
         'email': email,
@@ -189,6 +229,7 @@ def email_request(request):
     # Include code in development mode
     if settings.DEBUG:
         response_data['verification_code'] = code  # REMOVE IN PRODUCTION!
+        logger.info(f"Development mode: Including code in response")
     
     return Response(response_data, status=status.HTTP_200_OK)
 
