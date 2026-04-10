@@ -233,6 +233,7 @@ def email_verify(request):
             user.user_profile.is_email_verified = True
             user.user_profile.save()
         else:
+            # Create user profile if it doesn't exist
             UserProfile.objects.create(
                 user=user,
                 is_email_verified=True
@@ -265,6 +266,12 @@ def email_verify(request):
     # Generate JWT tokens
     refresh = RefreshToken.for_user(user)
     
+    # Get user profile data
+    user_profile = None
+    if hasattr(user, 'user_profile'):
+        from .serializers import UserProfileSerializer
+        user_profile = UserProfileSerializer(user.user_profile).data
+    
     return Response({
         'message': 'Email verified successfully',
         'created': created,
@@ -275,6 +282,7 @@ def email_verify(request):
             'email': email,
             'is_staff': user.is_staff,
         },
+        'user_profile': user_profile,  # Include user_profile in response
         'tokens': {
             'access': str(refresh.access_token),
             'refresh': str(refresh),

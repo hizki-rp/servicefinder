@@ -468,10 +468,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'user',
             'phone_number',
             'is_phone_verified',
+            'is_email_verified',  # Add email verification field
             'can_upgrade',
             'created_at',
         ]
-        read_only_fields = ['is_phone_verified', 'created_at']
+        read_only_fields = ['is_phone_verified', 'is_email_verified', 'created_at']
     
     def get_can_upgrade(self, obj):
         """Check if user can upgrade to provider"""
