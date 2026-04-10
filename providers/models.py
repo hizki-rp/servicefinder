@@ -507,6 +507,7 @@ class ProviderVerification(models.Model):
     VERIFICATION_TYPE_CHOICES = [
         ('national_id', 'National ID'),
         ('payment_proof', 'Payment Proof'),
+        ('selfie', 'Selfie Photo'),
     ]
     
     STATUS_CHOICES = [

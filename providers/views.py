@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User
@@ -327,6 +328,7 @@ class ProviderVerificationViewSet(viewsets.ModelViewSet):
     queryset = ProviderVerification.objects.all()
     serializer_class = ProviderVerificationSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)  # Explicitly handle file uploads
     
     def get_queryset(self):
         """Filter to show only user's own verifications"""
@@ -342,22 +344,39 @@ class ProviderVerificationViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """Create verification with explicit file handling"""
-        # Validate file presence
-        file = request.FILES.get('file')
-        if not file:
+        try:
+            # Debug logging
+            logger.info(f"📤 Verification upload request from user: {request.user.username}")
+            logger.info(f"📤 FILES: {list(request.FILES.keys())}")
+            logger.info(f"📤 DATA: {dict(request.data)}")
+            
+            # Validate file presence
+            file = request.FILES.get('file')
+            if not file:
+                logger.error("❌ No file in request.FILES")
+                return Response(
+                    {'error': 'File is required', 'detail': 'No file was uploaded'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate verification type
+            verification_type = request.data.get('verification_type')
+            if not verification_type:
+                logger.error("❌ No verification_type in request.data")
+                return Response(
+                    {'error': 'verification_type is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"✅ File received: {file.name}, size: {file.size}, type: {verification_type}")
+        except Exception as e:
+            logger.error(f"❌ Error in create method: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return Response(
-                {'error': 'File is required', 'detail': 'No file was uploaded'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
-        # Validate verification type
-        verification_type = request.data.get('verification_type')
-        if not verification_type:
-            return Response(
-                {'error': 'verification_type is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
         # Validate file size (10MB max)
         if file.size > 10 * 1024 * 1024:
             return Response(

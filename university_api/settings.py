@@ -298,20 +298,25 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 #NOTIFICATION AND ASYNC TASKS SETTINGS
 
 # Email Configuration — credentials from environment variables
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
+# Use Port 587 (TLS) as it's more reliable on cloud platforms like Render
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))  # Port 587 for TLS
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
-EMAIL_TIMEOUT = 10  # short timeout prevents gunicorn worker kills
+EMAIL_TIMEOUT = 30  # Increased timeout for better reliability
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER', 'noreply@mertservice.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 
+                                    f"Mert Service <{os.environ.get('EMAIL_HOST_USER', 'noreply@mertservice.com')}>")
 
 # Use real SMTP only when credentials are set; fall back to console logging
+# Console backend prints emails to terminal/logs - useful for debugging
 if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    print(f"✓ Email configured: SMTP via {EMAIL_HOST}:{EMAIL_PORT}")
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    print("⚠️  Email: Using console backend (emails will print to logs)")
 
 
 # Celery Configuration
