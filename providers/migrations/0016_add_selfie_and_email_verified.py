@@ -10,19 +10,24 @@ def add_fields_safely(apps, schema_editor):
     """
     from django.db import connection
     
-    with connection.cursor() as cursor:
-        # Add is_email_verified if it doesn't exist
-        try:
-            cursor.execute("""
-                ALTER TABLE providers_userprofile 
-                ADD COLUMN is_email_verified BOOLEAN DEFAULT FALSE NOT NULL;
-            """)
-            print("✅ Added is_email_verified column")
-        except Exception as e:
-            if 'already exists' in str(e).lower() or 'duplicate column' in str(e).lower():
-                print("⏭️ is_email_verified already exists, skipping")
-            else:
-                print(f"⚠️ Error adding is_email_verified: {e}")
+    # Use atomic block with savepoint to handle errors gracefully
+    from django.db import transaction
+    
+    try:
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                # Add is_email_verified if it doesn't exist
+                cursor.execute("""
+                    ALTER TABLE providers_userprofile 
+                    ADD COLUMN is_email_verified BOOLEAN DEFAULT FALSE NOT NULL;
+                """)
+                print("✅ Added is_email_verified column")
+    except Exception as e:
+        if 'already exists' in str(e).lower() or 'duplicate column' in str(e).lower():
+            print("⏭️ is_email_verified already exists, skipping")
+        else:
+            print(f"⚠️ Error adding is_email_verified: {e}")
+            # Don't re-raise - we want migration to continue
 
 
 class Migration(migrations.Migration):
