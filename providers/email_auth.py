@@ -163,6 +163,10 @@ Mert Service Team
             return True, "Email sent successfully"
         else:
             logger.error(f"❌ Email sending returned 0 for {email}")
+            # FALLBACK: In DEBUG mode, still allow verification
+            if settings.DEBUG:
+                logger.warning(f"🔓 DEBUG MODE: Code logged above, allowing verification to proceed")
+                return True, f"Email failed but code is: {code} (DEBUG MODE)"
             return False, "Email sending failed - no error details"
             
     except Exception as e:
@@ -170,6 +174,13 @@ Mert Service Team
         logger.error(f"❌ Error type: {type(e).__name__}")
         import traceback
         logger.error(traceback.format_exc())
+        
+        # FALLBACK: In DEBUG mode, still allow verification
+        if settings.DEBUG:
+            logger.warning(f"🔓 DEBUG MODE: SMTP failed but code is logged above")
+            logger.warning(f"📧 FALLBACK CODE for {email}: {code}")
+            return True, f"SMTP failed but code is: {code} (DEBUG MODE)"
+        
         return False, f"SMTP Error: {str(e)}"
 
 
