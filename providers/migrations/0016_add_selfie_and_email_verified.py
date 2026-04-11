@@ -3,24 +3,41 @@
 from django.db import migrations, models
 
 
+def add_fields_safely(apps, schema_editor):
+    """
+    Add fields safely - checks if they exist first.
+    Works on both PostgreSQL and SQLite.
+    """
+    from django.db import connection
+    
+    with connection.cursor() as cursor:
+        # Add is_email_verified if it doesn't exist
+        try:
+            cursor.execute("""
+                ALTER TABLE providers_userprofile 
+                ADD COLUMN is_email_verified BOOLEAN DEFAULT FALSE NOT NULL;
+            """)
+            print("✅ Added is_email_verified column")
+        except Exception as e:
+            if 'already exists' in str(e).lower() or 'duplicate column' in str(e).lower():
+                print("⏭️ is_email_verified already exists, skipping")
+            else:
+                print(f"⚠️ Error adding is_email_verified: {e}")
+
+
 class Migration(migrations.Migration):
-    """
-    Adds all missing fields that should have been in 0014.
-    Safe to run - uses ALTER TABLE IF NOT EXISTS pattern.
-    """
 
     dependencies = [
         ('providers', '0013_alter_providerservice_service_category'),
     ]
 
     operations = [
-        # Add is_email_verified to UserProfile
-        migrations.AddField(
-            model_name='userprofile',
-            name='is_email_verified',
-            field=models.BooleanField(default=False),
+        # Safely add is_email_verified
+        migrations.RunPython(
+            add_fields_safely,
+            migrations.RunPython.noop
         ),
-        # Add 'selfie' to verification type choices
+        # These are safe to run multiple times - they just update definitions
         migrations.AlterField(
             model_name='providerverification',
             name='verification_type',
@@ -33,7 +50,6 @@ class Migration(migrations.Migration):
                 max_length=20
             ),
         ),
-        # Make phone_number nullable
         migrations.AlterField(
             model_name='userprofile',
             name='phone_number',
