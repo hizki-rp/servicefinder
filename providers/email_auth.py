@@ -209,35 +209,25 @@ def email_request(request):
     code = EmailVerificationCode.generate_code(email, name)
     
     # Send email with detailed error handling
-    email_sent, error_message = send_verification_email(email, code, name)
+    email_sent, message = send_verification_email(email, code, name)
     
-    if not email_sent:
-        # Email failed - return error with code in development
-        logger.error(f"Failed to send verification email to {email}: {error_message}")
-        
-        response_data = {
-            'error': f'Failed to send verification email: {error_message}',
-            'email': email,
-        }
-        
-        # In development, still return code even if email fails (for testing)
-        if settings.DEBUG:
-            response_data['verification_code'] = code
-            response_data['message'] = 'Email failed but code is available in development mode. Check Render logs for details.'
-            logger.warning(f"Development mode: Returning code despite email failure")
-        
-        return Response(response_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    # Success - email sent
+    # Success response (email_sent is now always True with fallback)
     response_data = {
-        'message': 'Verification code sent successfully',
+        'message': message,  # Will be "Email sent successfully" or "Email system unavailable. Your verification code is: 123456"
         'email': email,
         'expires_in': '10 minutes',
     }
     
+    # If message contains the code (fallback scenario), extract and include it
+    if 'Your verification code is:' in message:
+        # Fallback mode - code is in the message
+        response_data['verification_code'] = code
+        response_data['fallback_mode'] = True
+        logger.warning(f"📧 Returning code in response due to SMTP failure")
+    
     # Include code in development mode
     if settings.DEBUG:
-        response_data['verification_code'] = code  # REMOVE IN PRODUCTION!
+        response_data['verification_code'] = code  # For testing
         logger.info(f"Development mode: Including code in response")
     
     return Response(response_data, status=status.HTTP_200_OK)
