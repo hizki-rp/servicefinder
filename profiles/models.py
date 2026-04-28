@@ -211,23 +211,24 @@ def send_welcome_email_on_registration(sender, instance, created, **kwargs):
             try:
                 user_name = instance.first_name if instance.first_name else instance.username
 
-                subject = "Welcome to Addis Temari - Complete Your Account Setup"
+                subject = "Welcome to Mert Service - Your Service Marketplace"
                 message = f"""Dear {user_name},
 
-Welcome to Addis Temari! We're excited to have you join our community of ambitious students pursuing their dreams of studying abroad.
+Welcome to Mert Service! We're excited to have you join our community connecting service providers with clients across Ethiopia.
 
-Thank you for creating your account! To get the most out of your Addis Temari experience, you must complete your account by subscribing to our premium services. This will unlock:
+Thank you for creating your account! Here's what you can do:
 
-🎓 Access to our comprehensive university database
-📋 Personalized application guidance  
-💼 Scholarship opportunities
-📊 Application tracking tools
-🎯 Expert support throughout your journey
+🔍 Browse Services - Find trusted service providers in your area
+📞 Connect Directly - Contact providers and get quotes instantly
+⭐ Read Reviews - Make informed decisions based on real feedback
+📍 Location-Based - Discover services near you
 
-Complete your account activation today and take the first step towards your international education goals!
+Whether you're looking for home services, professional help, or want to become a service provider yourself, Mert Service is here to help!
+
+Get started by exploring services in your area or upgrading to a provider account.
 
 Best regards,
-The Addis Temari Team"""
+The Mert Service Team"""
 
                 send_mail(
                     subject=subject,

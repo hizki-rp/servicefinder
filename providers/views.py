@@ -601,6 +601,193 @@ def register(request):
     }, status=status.HTTP_201_CREATED)
 
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password(request):
+    """
+    Request password reset code via email.
+    POST /api/auth/forgot-password/
+    Body: { "email": "user@example.com" }
+    """
+    email = request.data.get('email', '').strip().lower()
+    
+    if not email:
+        return Response(
+            {'error': 'Email is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Check if user exists with this email
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        # Don't reveal if email exists (security best practice)
+        return Response({
+            'success': True,
+            'message': 'If an account exists with this email, a reset code has been sent.'
+        }, status=status.HTTP_200_OK)
+    
+    # Create reset code
+    from .models import PasswordResetCode
+    reset_code = PasswordResetCode.create_reset_code(user)
+    
+    # Send email with code
+    try:
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        subject = "Password Reset Code - Mert Service"
+        message = f"""Hello {user.first_name or user.username},
+
+You requested to reset your password for Mert Service.
+
+Your verification code is: {reset_code.code}
+
+This code will expire in 10 minutes.
+
+If you didn't request this, please ignore this email.
+
+Best regards,
+The Mert Service Team"""
+        
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        
+        logger.info(f"Password reset code sent to {email}")
+        
+    except Exception as e:
+        logger.error(f"Failed to send reset email to {email}: {str(e)}")
+        # Don't fail the request if email fails
+    
+    return Response({
+        'success': True,
+        'message': 'If an account exists with this email, a reset code has been sent.',
+        'code': reset_code.code  # REMOVE IN PRODUCTION! Only for testing
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_reset_code(request):
+    """
+    Verify password reset code.
+    POST /api/auth/verify-reset-code/
+    Body: { "email": "user@example.com", "code": "123456" }
+    """
+    email = request.data.get('email', '').strip().lower()
+    code = request.data.get('code', '').strip()
+    
+    if not email or not code:
+        return Response(
+            {'error': 'Email and code are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Find the reset code
+    from .models import PasswordResetCode
+    try:
+        reset = PasswordResetCode.objects.filter(
+            email=email,
+            code=code,
+            is_used=False
+        ).latest('created_at')
+    except PasswordResetCode.DoesNotExist:
+        return Response(
+            {'error': 'Invalid or expired code'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Check if expired
+    if reset.is_expired():
+        return Response(
+            {'error': 'Code has expired. Please request a new one.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Check attempts
+    reset.attempts += 1
+    if reset.attempts > 5:
+        reset.is_used = True
+        reset.save()
+        return Response(
+            {'error': 'Too many attempts. Please request a new code.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    reset.save()
+    
+    return Response({
+        'success': True,
+        'message': 'Code verified successfully',
+        'email': email
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password(request):
+    """
+    Reset password with verified code.
+    POST /api/auth/reset-password/
+    Body: { "email": "user@example.com", "code": "123456", "new_password": "newpass123" }
+    """
+    email = request.data.get('email', '').strip().lower()
+    code = request.data.get('code', '').strip()
+    new_password = request.data.get('new_password', '').strip()
+    
+    if not email or not code or not new_password:
+        return Response(
+            {'error': 'Email, code, and new password are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if len(new_password) < 6:
+        return Response(
+            {'error': 'Password must be at least 6 characters'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Find and verify the reset code
+    from .models import PasswordResetCode
+    try:
+        reset = PasswordResetCode.objects.filter(
+            email=email,
+            code=code,
+            is_used=False
+        ).latest('created_at')
+    except PasswordResetCode.DoesNotExist:
+        return Response(
+            {'error': 'Invalid or expired code'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Check if expired
+    if reset.is_expired():
+        return Response(
+            {'error': 'Code has expired. Please request a new one.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Update user password
+    user = reset.user
+    user.set_password(new_password)
+    user.save()
+    
+    # Mark code as used
+    reset.is_used = True
+    reset.save()
+    
+    logger.info(f"Password reset successful for {email}")
+    
+    return Response({
+        'success': True,
+        'message': 'Password reset successfully. You can now login with your new password.'
+    }, status=status.HTTP_200_OK)
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

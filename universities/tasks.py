@@ -10,9 +10,9 @@ def send_welcome_email(user_id):
     """Sends a welcome email to a new user."""
     try:
         user = User.objects.get(id=user_id)
-        subject = 'Welcome to Addis Temari!'
-        message = f'Hi {user.username},\n\nThank you for registering at Addis Temari. We are excited to have you on board. Explore universities and start planning your future today!\n\nBest regards,\nThe Addis Temari Team'
-        from_email = 'noreply@addistemari.com'
+        subject = 'Welcome to Mert Service!'
+        message = f'Hi {user.username},\n\nThank you for joining Mert Service! We are excited to have you on board. Start exploring trusted service providers in your area or become a provider yourself!\n\nBest regards,\nThe Mert Service Team'
+        from_email = 'noreply@mertservice.com'
         recipient_list = [user.email]
         send_mail(subject, message, from_email, recipient_list)
         return f"Welcome email sent to {user.email}"

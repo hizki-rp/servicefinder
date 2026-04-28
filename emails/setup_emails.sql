@@ -59,42 +59,65 @@ CREATE INDEX IF NOT EXISTS emails_bulkemail_status_idx ON emails_bulkemail(statu
 
 -- Insert default templates
 INSERT INTO emails_emailtemplate (name, subject, body, is_active) VALUES
-('welcome', 'Welcome to Addis Temari!', 'Dear {{user_name}},
+('welcome', 'Welcome to Mert Service!', 'Dear {user_name},
 
-Welcome to Addis Temari! We''re excited to have you join our community of students pursuing their dreams.
+Welcome to Mert Service! We''re excited to have you join our community connecting service providers with clients across Ethiopia.
 
 Your account has been successfully created and you can now:
-- Browse our extensive database of universities
-- Track your application progress
-- Access premium content and features
+- Browse trusted service providers in your area
+- Contact providers directly and get instant quotes
+- Read reviews from real customers
+- Discover services near you with location-based search
+
+Whether you need home services, professional help, or want to become a provider yourself, Mert Service makes it easy!
 
 If you have any questions, feel free to contact our support team.
 
 Best regards,
-The Addis Temari Team', TRUE),
+The Mert Service Team', TRUE),
 
-('subscription_reminder', 'Your Addis Temari subscription is expiring soon', 'Dear {{user_name}},
+('provider_welcome', 'Welcome to Mert Service - Start Growing Your Business', 'Dear {user_name},
 
-Your Addis Temari subscription will expire soon. To continue enjoying our premium features, please renew your subscription.
+Congratulations on becoming a Mert Service provider! You''re now part of a growing network of trusted service professionals across Ethiopia.
 
-Premium features include:
-- Access to detailed university information
-- Application tracking tools
-- Priority support
+Next steps to get started:
+- Complete your provider profile
+- Upload verification documents (National ID)
+- Add your services with detailed descriptions
+- Set your pricing and availability
 
-Renew now to avoid any interruption in service.
-
-Best regards,
-The Addis Temari Team', TRUE),
-
-('application_deadline', 'Important: Application deadline approaching', 'Dear {{user_name}},
-
-This is a friendly reminder that you have university applications with upcoming deadlines.
-
-Please check your dashboard to review your applications and ensure all required documents are submitted on time.
+Once verified, your services will be visible to thousands of potential clients in your area!
 
 Best regards,
-The Addis Temari Team', TRUE)
+The Mert Service Team', TRUE),
+
+('verification_approved', 'Your Mert Service verification has been approved!', 'Dear {user_name},
+
+Great news! Your verification documents have been approved and your provider account is now active.
+
+Your services are now visible to clients and you can start receiving inquiries. Make sure to:
+- Keep your profile updated
+- Respond promptly to client inquiries
+- Maintain high service quality
+- Collect positive reviews
+
+Welcome to the Mert Service provider community!
+
+Best regards,
+The Mert Service Team', TRUE),
+
+('verification_rejected', 'Action Required: Mert Service verification needs attention', 'Dear {user_name},
+
+We''ve reviewed your verification documents and unfortunately we need you to resubmit them.
+
+Reason: {rejection_reason}
+
+Please upload clear, valid documents to complete your verification. Once approved, you''ll be able to start offering your services to clients.
+
+If you have questions, contact our support team.
+
+Best regards,
+The Mert Service Team', TRUE)
 ON CONFLICT (name) DO NOTHING;
 
 

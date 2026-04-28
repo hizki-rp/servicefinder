@@ -108,29 +108,70 @@ Mert Service Team
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-        .content {{ background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }}
-        .code-box {{ background: white; border: 2px dashed #3b82f6; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0; }}
-        .code {{ font-size: 32px; font-weight: bold; color: #1e3a5f; letter-spacing: 8px; }}
-        .footer {{ text-align: center; margin-top: 20px; color: #64748b; font-size: 14px; }}
+        .header {{ 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            padding: 30px; 
+            text-align: center; 
+            border-radius: 10px 10px 0 0; 
+        }}
+        .content {{ 
+            background: #f8fafc; 
+            padding: 30px; 
+            border-radius: 0 0 10px 10px; 
+        }}
+        .code-box {{ 
+            background: white; 
+            border: 2px dashed #667eea; 
+            border-radius: 10px; 
+            padding: 20px; 
+            text-align: center; 
+            margin: 20px 0; 
+        }}
+        .code {{ 
+            font-size: 32px; 
+            font-weight: bold; 
+            color: #667eea; 
+            letter-spacing: 8px; 
+        }}
+        .footer {{ 
+            text-align: center; 
+            margin-top: 20px; 
+            color: #64748b; 
+            font-size: 14px; 
+        }}
+        .info-box {{
+            background: #e0e7ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🔍 Mert Service</h1>
-            <p>Email Verification</p>
+            <p>Service Provider Verification</p>
         </div>
         <div class="content">
             <p>Hello{' <strong>' + name + '</strong>' if name else ''}!</p>
-            <p>Your verification code is:</p>
+            <p>Thank you for joining Mert Service as a service provider. To complete your registration, please use the verification code below:</p>
             <div class="code-box">
                 <div class="code">{code}</div>
             </div>
             <p><strong>This code will expire in 10 minutes.</strong></p>
+            
+            <div class="info-box">
+                <p style="margin: 0;"><strong>What's Next?</strong></p>
+                <p style="margin: 5px 0 0 0;">After verification, you'll be able to create your service listings and connect with clients looking for your services.</p>
+            </div>
+            
             <p>If you didn't request this code, please ignore this email.</p>
             <div class="footer">
                 <p>Best regards,<br>Mert Service Team</p>
+                <p style="font-size: 12px; color: #94a3b8;">Connecting service providers with clients across Ethiopia</p>
             </div>
         </div>
     </div>

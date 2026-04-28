@@ -10,6 +10,9 @@ from .views import (
     auth_user_info,
     service_categories_list,
     register,
+    forgot_password,
+    verify_reset_code,
+    reset_password,
     otp_request,
     otp_verify,
     upgrade_to_provider,
@@ -52,6 +55,11 @@ urlpatterns = [
     path('auth/user/', auth_user_info, name='auth-user-info'),
     path('categories/', service_categories_list, name='service-categories'),
     path('register/', register, name='register'),
+    
+    # Password reset endpoints
+    path('auth/forgot-password/', forgot_password, name='forgot-password'),
+    path('auth/verify-reset-code/', verify_reset_code, name='verify-reset-code'),
+    path('auth/reset-password/', reset_password, name='reset-password'),
     
     # OTP endpoints (legacy - deprecated)
     path('auth/otp-request/', otp_request, name='otp-request'),

@@ -116,6 +116,52 @@ class OTPVerification(models.Model):
         return f"OTP for {self.phone_number} - {self.otp_code}"
 
 
+class PasswordResetCode(models.Model):
+    """
+    Password reset verification codes.
+    Used for forgot password flow with email verification.
+    """
+    email = models.EmailField()
+    code = models.CharField(max_length=6)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_resets')
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempts = models.IntegerField(default=0)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['email', '-created_at']),
+            models.Index(fields=['code', 'is_used']),
+        ]
+    
+    def is_expired(self):
+        """Check if code has expired (10 minutes)"""
+        return timezone.now() > self.expires_at
+    
+    def generate_code(self):
+        """Generate a 6-digit verification code"""
+        self.code = ''.join(random.choices(string.digits, k=6))
+        self.expires_at = timezone.now() + timezone.timedelta(minutes=10)
+        self.save()
+        return self.code
+    
+    @classmethod
+    def create_reset_code(cls, user):
+        """Create new password reset code for user"""
+        reset = cls.objects.create(
+            email=user.email,
+            user=user,
+            expires_at=timezone.now() + timezone.timedelta(minutes=10)
+        )
+        reset.generate_code()
+        return reset
+    
+    def __str__(self):
+        return f"Reset code for {self.email} - {self.code}"
+
+
 class UserProfile(models.Model):
     """
     Extended profile for regular users (reviewers).

@@ -116,35 +116,28 @@ def send_payment_completion_email(sender, instance, created, **kwargs):
             # Get user's first name or username for personalization
             user_name = instance.user.first_name if instance.user.first_name else instance.user.username
             
-            # Welcome message for paid users
-            subject = "Welcome to Addis Temari Premium - Your Next Steps"
+            # Welcome message for users (generic for service platform)
+            subject = "Welcome to Mert Service - Get Started"
             message = f"""Dear {user_name},
 
-Thank you for completing your account creation and being a valued member! We're thrilled to support you on your journey to international education.
+Thank you for joining Mert Service! We're excited to have you as part of our community connecting service providers with clients across Ethiopia.
 
-Here's what you need to do next:
+Here's how to get the most out of Mert Service:
 
-📋 REQUIRED DOCUMENTS FOR UNIVERSITY APPLICATION:
+🔍 FOR CLIENTS:
+• Browse services by category or location
+• Read reviews from real customers
+• Contact providers directly for quotes
+• Save your favorite providers
+• Rate and review services you've used
 
-For Bachelor's Degree:
-• High school transcripts (translated and certified)
-• English proficiency test (IELTS/TOEFL) - minimum 6.0 IELTS or 80 TOEFL - Note that some universities accept Proficiency letter or medium of instruction
-• Personal statement/essay
-• Letters of recommendation (2-3)
-• Passport copy
-• Financial documents (bank statements, sponsorship letters)
-• Application fee payment proof
-
-For Master's Degree:
-• Bachelor's degree certificate and transcripts (translated and certified)
-• English proficiency test (IELTS/TOEFL) - minimum 6.5 IELTS or 90 TOEFL
-• Statement of purpose
-• Letters of recommendation (2-3 academic references)
-• CV/Resume
-• Research proposal (for research-based programs)
-• Passport copy
-• Financial documents
-• Application fee payment proof
+👨‍💼 FOR SERVICE PROVIDERS:
+• Create your provider profile
+• Upload verification documents (National ID)
+• List your services with detailed descriptions
+• Set competitive pricing
+• Respond to client inquiries promptly
+• Build your reputation with positive reviews
 
 🎯 NEXT STEPS:
 1. Complete your profile with accurate information

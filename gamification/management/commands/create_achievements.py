@@ -15,7 +15,7 @@ class Command(BaseCommand):
             },
             {
                 'name': 'first_login',
-                'description': 'Welcome to Addis Temari! First login completed',
+                'description': 'Welcome to Mert Service! First login completed',
                 'category': 'milestone',
                 'icon': '🎉',
                 'points': 25
