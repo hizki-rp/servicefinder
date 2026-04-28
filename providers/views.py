@@ -896,6 +896,7 @@ def user_status(request):
 # ============================================
 
 @api_view(['GET'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_pending_verifications(request):
     """
@@ -933,8 +934,11 @@ def admin_pending_verifications(request):
             },
             'phone_number': provider.phone_number,
             'city': provider.city,
+            'is_verified': provider.is_verified,
+            'is_active': provider.is_active,
             'created_at': provider.created_at,
             'trial_expiry_date': provider.trial_expiry_date,
+            'days_until_trial_expiry': provider.days_until_trial_expiry,
             # KYC images uploaded directly to provider profile
             'selfie_url': request.build_absolute_uri(provider.selfie_image.url) if provider.selfie_image else None,
             'id_image_url': request.build_absolute_uri(provider.id_image.url) if provider.id_image else None,
