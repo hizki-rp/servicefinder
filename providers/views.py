@@ -1615,6 +1615,151 @@ def admin_service_list(request):
     })
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_stats(request):
+    """
+    Get admin dashboard statistics.
+    GET /api/providers/admin/stats/
+    """
+    try:
+        logger.info(f"📊 Admin stats requested by user: {request.user.username} (is_staff: {request.user.is_staff})")
+        
+        if not request.user.is_staff:
+            logger.warning(f"⚠️ Non-admin user {request.user.username} attempted to access admin stats")
+            return Response(
+                {'error': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        from django.db.models import Count, Q, Avg
+        from datetime import timedelta
+        
+        # User statistics
+        try:
+            total_users = User.objects.count()
+            active_users = User.objects.filter(is_active=True).count()
+            logger.info(f"✅ User stats: total={total_users}, active={active_users}")
+        except Exception as e:
+            logger.error(f"❌ Error getting user stats: {e}")
+            total_users = 0
+            active_users = 0
+        
+        # Provider statistics
+        try:
+            total_providers = ProviderProfile.objects.count()
+            verified_providers = ProviderProfile.objects.filter(is_verified=True).count()
+            pending_providers = ProviderProfile.objects.filter(is_verified=False).count()
+            logger.info(f"✅ Provider stats: total={total_providers}, verified={verified_providers}, pending={pending_providers}")
+        except Exception as e:
+            logger.error(f"❌ Error getting provider stats: {e}")
+            total_providers = 0
+            verified_providers = 0
+            pending_providers = 0
+        
+        # Service statistics
+        try:
+            total_services = ProviderService.objects.count()
+            active_services = ProviderService.objects.filter(is_active=True).count()
+            hidden_services = ProviderService.objects.filter(is_active=False).count()
+            logger.info(f"✅ Service stats: total={total_services}, active={active_services}, hidden={hidden_services}")
+        except Exception as e:
+            logger.error(f"❌ Error getting service stats: {e}")
+            total_services = 0
+            active_services = 0
+            hidden_services = 0
+        
+        # Verification statistics
+        try:
+            pending_verifications = ProviderVerification.objects.filter(status='pending').count()
+            approved_verifications = ProviderVerification.objects.filter(status='approved').count()
+            rejected_verifications = ProviderVerification.objects.filter(status='rejected').count()
+            logger.info(f"✅ Verification stats: pending={pending_verifications}, approved={approved_verifications}, rejected={rejected_verifications}")
+        except Exception as e:
+            logger.error(f"❌ Error getting verification stats: {e}")
+            pending_verifications = 0
+            approved_verifications = 0
+            rejected_verifications = 0
+        
+        # Review statistics
+        try:
+            total_reviews = Review.objects.count()
+            average_rating = Review.objects.aggregate(Avg('rating'))['rating__avg'] or 0
+            logger.info(f"✅ Review stats: total={total_reviews}, avg_rating={average_rating}")
+        except Exception as e:
+            logger.error(f"❌ Error getting review stats: {e}")
+            total_reviews = 0
+            average_rating = 0
+        
+        # Call log statistics
+        try:
+            total_calls = CallLog.objects.count()
+            logger.info(f"✅ Call stats: total={total_calls}")
+        except Exception as e:
+            logger.error(f"❌ Error getting call stats: {e}")
+            total_calls = 0
+        
+        # Recent activity (last 7 days)
+        try:
+            seven_days_ago = timezone.now() - timedelta(days=7)
+            
+            recent_users = User.objects.filter(date_joined__gte=seven_days_ago).count()
+            recent_providers = ProviderProfile.objects.filter(created_at__gte=seven_days_ago).count()
+            recent_services = ProviderService.objects.filter(created_at__gte=seven_days_ago).count()
+            recent_reviews = Review.objects.filter(created_at__gte=seven_days_ago).count()
+            logger.info(f"✅ Recent activity: users={recent_users}, providers={recent_providers}, services={recent_services}, reviews={recent_reviews}")
+        except Exception as e:
+            logger.error(f"❌ Error getting recent activity: {e}")
+            recent_users = 0
+            recent_providers = 0
+            recent_services = 0
+            recent_reviews = 0
+        
+        stats_data = {
+            'users': {
+                'total': total_users,
+                'active': active_users,
+                'recent_7_days': recent_users,
+            },
+            'providers': {
+                'total': total_providers,
+                'verified': verified_providers,
+                'pending': pending_providers,
+                'recent_7_days': recent_providers,
+            },
+            'services': {
+                'total': total_services,
+                'active': active_services,
+                'hidden': hidden_services,
+                'recent_7_days': recent_services,
+            },
+            'verifications': {
+                'pending': pending_verifications,
+                'approved': approved_verifications,
+                'rejected': rejected_verifications,
+            },
+            'reviews': {
+                'total': total_reviews,
+                'average_rating': round(average_rating, 2),
+                'recent_7_days': recent_reviews,
+            },
+            'calls': {
+                'total': total_calls,
+            },
+        }
+        
+        logger.info(f"✅ Admin stats generated successfully for {request.user.username}")
+        return Response(stats_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Critical error generating admin stats: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return Response(
+            {'error': 'Failed to generate statistics', 'detail': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 
 # ============================================
 # BROADCAST NOTIFICATION SYSTEM

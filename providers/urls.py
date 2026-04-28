@@ -27,6 +27,7 @@ from .views import (
     admin_approve_verification,
     admin_provider_list,
     admin_service_list,
+    admin_stats,
     register_push_token,
     admin_send_broadcast,
     admin_broadcast_list,
@@ -85,6 +86,7 @@ urlpatterns = [
     path('admin/services/', admin_service_list, name='admin-service-list'),
     path('admin/services/<int:service_id>/hide/', admin_hide_service, name='admin-hide-service'),
     path('admin/verifications/<int:verification_id>/approve/', admin_approve_verification, name='admin-approve-verification'),
+    path('admin/stats/', admin_stats, name='admin-stats'),
     
     # Broadcast Notification System
     path('push-token/register/', register_push_token, name='register-push-token'),
