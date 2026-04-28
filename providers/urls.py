@@ -15,6 +15,7 @@ from .views import (
     upgrade_to_provider,
     user_status,
     upload_kyc_images,
+    test_endpoint,
     admin_pending_verifications,
     admin_verify_provider,
     admin_verify_document,
@@ -42,6 +43,9 @@ router.register(r'reviews', ReviewViewSet, basename='review')
 urlpatterns = [
     # Router URLs
     path('', include(router.urls)),
+    
+    # Test endpoint
+    path('test/', test_endpoint, name='test-endpoint'),
     
     # Custom endpoints
     path('track-call/', track_call, name='track-call'),

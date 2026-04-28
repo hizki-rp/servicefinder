@@ -897,6 +897,18 @@ def user_status(request):
 
 @api_view(['GET'])
 @api_view(['GET'])
+@permission_classes([AllowAny])
+def test_endpoint(request):
+    """Test endpoint to verify deployment"""
+    return Response({
+        'status': 'ok',
+        'message': 'Backend is running',
+        'timestamp': timezone.now().isoformat(),
+        'version': 'bulletproof-v2'
+    })
+
+
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_pending_verifications(request):
     """
