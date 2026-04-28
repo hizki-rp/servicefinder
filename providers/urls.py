@@ -17,6 +17,7 @@ from .views import (
     upload_kyc_images,
     admin_pending_verifications,
     admin_verify_provider,
+    admin_verify_document,
     admin_suspend_provider,
     admin_hide_service,
     admin_approve_verification,
@@ -63,6 +64,7 @@ urlpatterns = [
     
     # Admin endpoints
     path('admin/pending-verifications/', admin_pending_verifications, name='admin-pending-verifications'),
+    path('admin/verify-document/<int:verification_id>/', admin_verify_document, name='admin-verify-document'),
     path('admin/verify-provider/<int:provider_id>/', admin_verify_provider, name='admin-verify-provider'),
     
     # Admin Control Center

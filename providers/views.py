@@ -900,7 +900,8 @@ def user_status(request):
 @permission_classes([IsAuthenticated])
 def admin_pending_verifications(request):
     """
-    Get all providers pending verification (admin only).
+    Get all provider verification documents pending review (admin only).
+    Returns ProviderVerification records with status='pending'.
     """
     if not request.user.is_staff:
         return Response(
@@ -908,56 +909,105 @@ def admin_pending_verifications(request):
             status=status.HTTP_403_FORBIDDEN
         )
     
-    # Get all unverified providers with their documents
-    pending_providers = ProviderProfile.objects.filter(
-        is_verified=False
-    ).select_related('user').prefetch_related('verifications')
+    # Get all pending verification documents
+    pending_verifications = ProviderVerification.objects.filter(
+        status='pending'
+    ).select_related('user', 'user__provider_profile').order_by('-uploaded_at')
     
     data = []
-    for provider in pending_providers:
-        # Get latest National ID verification
-        national_id_verification = provider.verifications.filter(
-            verification_type='national_id'
-        ).order_by('-uploaded_at').first()
-        
-        # Get latest payment proof verification
-        payment_proof_verification = provider.verifications.filter(
-            verification_type='payment_proof'
-        ).order_by('-uploaded_at').first()
+    for verification in pending_verifications:
+        # Get provider profile if exists
+        provider_profile = None
+        try:
+            provider_profile = verification.user.provider_profile
+        except:
+            pass
         
         data.append({
-            'id': provider.id,
+            'id': verification.id,
             'user': {
-                'id': provider.user.id,
-                'username': provider.user.username,
-                'name': provider.user.get_full_name() or provider.user.first_name or provider.user.username,
+                'id': verification.user.id,
+                'username': verification.user.username,
+                'name': verification.user.get_full_name() or verification.user.first_name or verification.user.username,
             },
-            'phone_number': provider.phone_number,
-            'city': provider.city,
-            'is_verified': provider.is_verified,
-            'is_active': provider.is_active,
-            'created_at': provider.created_at,
-            'trial_expiry_date': provider.trial_expiry_date,
-            'days_until_trial_expiry': provider.days_until_trial_expiry,
-            # KYC images uploaded directly to provider profile
-            'selfie_url': request.build_absolute_uri(provider.selfie_image.url) if provider.selfie_image else None,
-            'id_image_url': request.build_absolute_uri(provider.id_image.url) if provider.id_image else None,
-            'national_id': {
-                'id': national_id_verification.id if national_id_verification else None,
-                'file_url': request.build_absolute_uri(national_id_verification.file.url) if national_id_verification and national_id_verification.file else None,
-                'uploaded_at': national_id_verification.uploaded_at if national_id_verification else None,
-            } if national_id_verification else None,
-            'payment_proof': {
-                'id': payment_proof_verification.id if payment_proof_verification else None,
-                'file_url': request.build_absolute_uri(payment_proof_verification.file.url) if payment_proof_verification and payment_proof_verification.file else None,
-                'uploaded_at': payment_proof_verification.uploaded_at if payment_proof_verification else None,
-            } if payment_proof_verification else None,
+            'verification_type': verification.verification_type,
+            'verification_type_display': verification.get_verification_type_display(),
+            'file_url': request.build_absolute_uri(verification.file.url) if verification.file else None,
+            'status': verification.status,
+            'uploaded_at': verification.uploaded_at,
+            'expiry_date': verification.expiry_date,
+            # Provider profile info
+            'provider_profile': {
+                'id': provider_profile.id if provider_profile else None,
+                'phone_number': provider_profile.phone_number if provider_profile else None,
+                'city': provider_profile.city if provider_profile else None,
+                'is_verified': provider_profile.is_verified if provider_profile else False,
+                'national_id_verified': provider_profile.national_id_verified if provider_profile else False,
+                'payment_verified': provider_profile.payment_verified if provider_profile else False,
+            } if provider_profile else None,
         })
     
     return Response({
         'count': len(data),
         'results': data
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_verify_document(request, verification_id):
+    """
+    Approve or reject a verification document (admin only).
+    POST /api/providers/admin/verify-document/<verification_id>/
+    Body: { "action": "approve" | "reject", "reason": "..." }
+    """
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Admin access required'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    action_type = request.data.get('action')  # 'approve' or 'reject'
+    reason = request.data.get('reason', '')
+    
+    if action_type not in ['approve', 'reject']:
+        return Response(
+            {'error': 'Invalid action. Must be "approve" or "reject"'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        verification = ProviderVerification.objects.get(id=verification_id)
+    except ProviderVerification.DoesNotExist:
+        return Response(
+            {'error': 'Verification document not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    if action_type == 'approve':
+        verification.approve(request.user)
+        
+        return Response({
+            'success': True,
+            'message': f'{verification.get_verification_type_display()} approved for {verification.user.username}',
+            'verification': ProviderVerificationSerializer(verification, context={'request': request}).data
+        })
+    
+    else:  # reject
+        if not reason or len(reason.strip()) < 10:
+            return Response(
+                {'error': 'Rejection reason must be at least 10 characters'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        verification.reject(request.user, reason)
+        verification.save()
+        
+        return Response({
+            'success': True,
+            'message': f'{verification.get_verification_type_display()} rejected for {verification.user.username}',
+            'verification': ProviderVerificationSerializer(verification, context={'request': request}).data
+        })
 
 
 @api_view(['POST'])
