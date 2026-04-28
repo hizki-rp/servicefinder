@@ -902,6 +902,8 @@ def admin_pending_verifications(request):
     """
     Get all provider verification documents pending review (admin only).
     Returns ProviderVerification records with status='pending'.
+    
+    PRODUCTION-SAFE: Handles missing files, missing profiles, and null relations.
     """
     if not request.user.is_staff:
         return Response(
@@ -910,66 +912,98 @@ def admin_pending_verifications(request):
         )
     
     try:
-        # Get all pending verification documents
+        # SAFE QUERY: Filter out records with missing critical relations
         pending_verifications = ProviderVerification.objects.filter(
-            status='pending'
+            status='pending',
+            user__isnull=False  # Must have a user
         ).select_related('user').order_by('-uploaded_at')
         
-        logger.info(f"📋 Found {pending_verifications.count()} pending verifications")
+        total_found = pending_verifications.count()
+        logger.info(f"📋 Found {total_found} pending verifications")
         
         data = []
+        skipped = 0
+        
         for verification in pending_verifications:
             try:
-                # Get provider profile if exists
+                # SAFE: Check user exists
+                if not verification.user:
+                    logger.warning(f"⚠️ Skipping verification {verification.id} - No user")
+                    skipped += 1
+                    continue
+                
+                user = verification.user
+                
+                # SAFE: Get provider profile (may not exist)
                 provider_profile = None
                 try:
-                    provider_profile = verification.user.provider_profile
-                except Exception as e:
-                    logger.warning(f"⚠️ No provider profile for user {verification.user.username}: {str(e)}")
+                    provider_profile = user.provider_profile
+                except Exception:
+                    logger.warning(f"⚠️ No provider profile for user {user.username} (verification {verification.id})")
                 
+                # SAFE: Get file URL (may not exist)
+                file_url = None
+                if verification.file:
+                    try:
+                        file_url = request.build_absolute_uri(verification.file.url)
+                    except Exception as e:
+                        logger.warning(f"⚠️ Cannot build file URL for verification {verification.id}: {str(e)}")
+                
+                # SAFE: Build response with all null checks
                 data.append({
                     'id': verification.id,
                     'user': {
-                        'id': verification.user.id,
-                        'username': verification.user.username,
-                        'name': verification.user.get_full_name() or verification.user.first_name or verification.user.username,
+                        'id': user.id,
+                        'username': user.username,
+                        'name': user.get_full_name() or user.first_name or user.username or 'Unknown',
                     },
                     'verification_type': verification.verification_type,
                     'verification_type_display': verification.get_verification_type_display(),
-                    'file_url': request.build_absolute_uri(verification.file.url) if verification.file else None,
+                    'file_url': file_url,
                     'status': verification.status,
                     'uploaded_at': verification.uploaded_at,
                     'expiry_date': verification.expiry_date,
-                    # Provider profile info
+                    # Provider profile info (may be null)
                     'provider_profile': {
                         'id': provider_profile.id if provider_profile else None,
                         'phone_number': provider_profile.phone_number if provider_profile else None,
-                        'city': provider_profile.city if provider_profile else None,
+                        'city': provider_profile.city if provider_profile else 'Unknown',
                         'is_verified': provider_profile.is_verified if provider_profile else False,
                         'national_id_verified': provider_profile.national_id_verified if provider_profile else False,
                         'payment_verified': provider_profile.payment_verified if provider_profile else False,
                     } if provider_profile else None,
                 })
+                
             except Exception as e:
                 logger.error(f"❌ Error processing verification {verification.id}: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
+                skipped += 1
                 continue
         
-        logger.info(f"✅ Returning {len(data)} pending verifications")
+        logger.info(f"✅ Returning {len(data)} pending verifications ({skipped} skipped)")
+        
+        # ALWAYS return 200 with data (even if empty)
         return Response({
             'count': len(data),
-            'results': data
-        })
+            'results': data,
+            'total_found': total_found,
+            'skipped': skipped
+        }, status=status.HTTP_200_OK)
         
     except Exception as e:
+        # CRITICAL ERROR: Log and return safe error response
         logger.error(f"❌ CRITICAL ERROR in admin_pending_verifications: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        return Response(
-            {'error': str(e), 'detail': 'Internal server error'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        
+        # Return JSON error (not HTML)
+        return Response({
+            'error': 'Internal server error',
+            'detail': str(e),
+            'count': 0,
+            'results': []
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
