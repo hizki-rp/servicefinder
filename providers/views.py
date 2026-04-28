@@ -909,48 +909,67 @@ def admin_pending_verifications(request):
             status=status.HTTP_403_FORBIDDEN
         )
     
-    # Get all pending verification documents
-    pending_verifications = ProviderVerification.objects.filter(
-        status='pending'
-    ).select_related('user', 'user__provider_profile').order_by('-uploaded_at')
-    
-    data = []
-    for verification in pending_verifications:
-        # Get provider profile if exists
-        provider_profile = None
-        try:
-            provider_profile = verification.user.provider_profile
-        except:
-            pass
+    try:
+        # Get all pending verification documents
+        pending_verifications = ProviderVerification.objects.filter(
+            status='pending'
+        ).select_related('user').order_by('-uploaded_at')
         
-        data.append({
-            'id': verification.id,
-            'user': {
-                'id': verification.user.id,
-                'username': verification.user.username,
-                'name': verification.user.get_full_name() or verification.user.first_name or verification.user.username,
-            },
-            'verification_type': verification.verification_type,
-            'verification_type_display': verification.get_verification_type_display(),
-            'file_url': request.build_absolute_uri(verification.file.url) if verification.file else None,
-            'status': verification.status,
-            'uploaded_at': verification.uploaded_at,
-            'expiry_date': verification.expiry_date,
-            # Provider profile info
-            'provider_profile': {
-                'id': provider_profile.id if provider_profile else None,
-                'phone_number': provider_profile.phone_number if provider_profile else None,
-                'city': provider_profile.city if provider_profile else None,
-                'is_verified': provider_profile.is_verified if provider_profile else False,
-                'national_id_verified': provider_profile.national_id_verified if provider_profile else False,
-                'payment_verified': provider_profile.payment_verified if provider_profile else False,
-            } if provider_profile else None,
+        logger.info(f"📋 Found {pending_verifications.count()} pending verifications")
+        
+        data = []
+        for verification in pending_verifications:
+            try:
+                # Get provider profile if exists
+                provider_profile = None
+                try:
+                    provider_profile = verification.user.provider_profile
+                except Exception as e:
+                    logger.warning(f"⚠️ No provider profile for user {verification.user.username}: {str(e)}")
+                
+                data.append({
+                    'id': verification.id,
+                    'user': {
+                        'id': verification.user.id,
+                        'username': verification.user.username,
+                        'name': verification.user.get_full_name() or verification.user.first_name or verification.user.username,
+                    },
+                    'verification_type': verification.verification_type,
+                    'verification_type_display': verification.get_verification_type_display(),
+                    'file_url': request.build_absolute_uri(verification.file.url) if verification.file else None,
+                    'status': verification.status,
+                    'uploaded_at': verification.uploaded_at,
+                    'expiry_date': verification.expiry_date,
+                    # Provider profile info
+                    'provider_profile': {
+                        'id': provider_profile.id if provider_profile else None,
+                        'phone_number': provider_profile.phone_number if provider_profile else None,
+                        'city': provider_profile.city if provider_profile else None,
+                        'is_verified': provider_profile.is_verified if provider_profile else False,
+                        'national_id_verified': provider_profile.national_id_verified if provider_profile else False,
+                        'payment_verified': provider_profile.payment_verified if provider_profile else False,
+                    } if provider_profile else None,
+                })
+            except Exception as e:
+                logger.error(f"❌ Error processing verification {verification.id}: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                continue
+        
+        logger.info(f"✅ Returning {len(data)} pending verifications")
+        return Response({
+            'count': len(data),
+            'results': data
         })
-    
-    return Response({
-        'count': len(data),
-        'results': data
-    })
+        
+    except Exception as e:
+        logger.error(f"❌ CRITICAL ERROR in admin_pending_verifications: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return Response(
+            {'error': str(e), 'detail': 'Internal server error'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['POST'])
